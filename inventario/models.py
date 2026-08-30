@@ -1,19 +1,3 @@
-"""Modelos de la app `inventario`.
-
-Portados desde schema_desarmaduria.sql. Se conservan los nombres de tabla y
-de columna del esquema original mediante `Meta.db_table` y `db_column`, de modo
-que `makemigrations` + `migrate` generan exactamente esas tablas en MySQL.
-
-Notas de portabilidad:
-- Los PK `... UNSIGNED AUTO_INCREMENT` se mapean a `AutoField` (INT). Django no
-  distingue MEDIUMINT/SMALLINT; el rango efectivo es mayor, sin impacto funcional.
-- `TINYINT(1)` -> `BooleanField`.
-- `YEAR` -> `PositiveSmallIntegerField` (Django no tiene campo YEAR nativo).
-- `DATETIME DEFAULT CURRENT_TIMESTAMP` -> `auto_now_add=True`.
-- `rolPermiso` tenia PK compuesta (idRol, idPermiso); Django <5.2 no soporta PK
-  compuesta, se usa PK surrogado `id` + restriccion UNIQUE sobre ambas FKs.
-"""
-
 from django.db import models
 
 
