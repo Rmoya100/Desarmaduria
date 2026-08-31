@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .models import (
     Categoria,
@@ -32,10 +33,53 @@ class DetalleEntradaInline(admin.TabularInline):
 
 
 @admin.register(Usuario)
-class UsuarioAdmin(admin.ModelAdmin):
-    list_display = ("username", "nombre_usuario", "email", "rol", "activo")
-    list_filter = ("activo", "rol")
+class UsuarioAdmin(BaseUserAdmin):
+    """Hereda de `UserAdmin`, no de `ModelAdmin`.
+
+    Es importante: `UserAdmin` usa un formulario que HASHEA la contrasena al
+    guardarla. Con un `ModelAdmin` comun, la clave se guardaria tal cual la
+    escribio el operador, en texto plano.
+    """
+
+    list_display = ("username", "nombre_usuario", "email", "rol", "is_active")
+    list_filter = ("is_active", "is_staff", "rol")
     search_fields = ("username", "nombre_usuario", "email")
+    ordering = ("username",)
+    readonly_fields = ("last_login", "date_joined")
+
+    fieldsets = (
+        (None, {"fields": ("username", "password")}),
+        ("Datos personales", {"fields": ("nombre_usuario", "email", "rol")}),
+        (
+            "Permisos",
+            {
+                "fields": (
+                    "is_active",
+                    "is_staff",
+                    "is_superuser",
+                    "groups",
+                    "user_permissions",
+                )
+            },
+        ),
+        ("Fechas", {"fields": ("last_login", "date_joined")}),
+    )
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "username",
+                    "nombre_usuario",
+                    "email",
+                    "rol",
+                    "password1",
+                    "password2",
+                ),
+            },
+        ),
+    )
 
 
 @admin.register(Vehiculo)

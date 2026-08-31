@@ -14,6 +14,8 @@ Notas de portabilidad:
   compuesta, se usa PK surrogado `id` + restriccion UNIQUE sobre ambas FKs.
 """
 
+from django.conf import settings
+from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 
@@ -72,22 +74,51 @@ class RolPermiso(models.Model):
         return f"{self.rol} / {self.permiso}"
 
 
-class Usuario(models.Model):
-    id_usuario = models.AutoField(primary_key=True, db_column="idUsuario")
+class Usuario(AbstractUser):
+    """Usuario del sistema. Hereda de `AbstractUser`, asi que Django aporta el
+    hasheo de contrasenas, el login, las sesiones y el admin.
+
+    Los `db_column` conservan los nombres de columna del schema original:
+
+        idUsuario     -> id            (heredado, renombrado)
+        username      -> username      (heredado)
+        email         -> email         (heredado)
+        passwordHash  -> password      (heredado)  <- Django la hashea
+        activo        -> is_active     (heredado)
+        fechaCreacion -> date_joined   (heredado)
+        ultimoAcceso  -> last_login    (heredado)
+        nombreUsuario -> nombre_usuario (propio)
+        idRol         -> rol            (propio)
+
+    `first_name` / `last_name` se eliminan porque `nombre_usuario` los cubre.
+    A cambio, `AbstractUser` agrega `is_staff` e `is_superuser`, que el admin
+    de Django necesita para funcionar.
+    """
+
+    first_name = None
+    last_name = None
+
+    id = models.AutoField(primary_key=True, db_column="idUsuario")
     nombre_usuario = models.CharField(max_length=100, db_column="nombreUsuario")
-    email = models.EmailField(max_length=100, unique=True, db_column="email")
     username = models.CharField(max_length=50, unique=True, db_column="username")
-    password_hash = models.CharField(max_length=255, db_column="passwordHash")
+    email = models.EmailField(max_length=100, unique=True, db_column="email")
+    password = models.CharField(max_length=255, db_column="passwordHash")
+    # Nullable a proposito: el superusuario tecnico (createsuperuser) no tiene
+    # un rol de negocio. Los usuarios reales SI deben tener uno.
     rol = models.ForeignKey(
-        Rol, on_delete=models.PROTECT, db_column="idRol", related_name="usuarios"
+        Rol,
+        on_delete=models.PROTECT,
+        db_column="idRol",
+        related_name="usuarios",
+        null=True,
+        blank=True,
     )
-    activo = models.BooleanField(default=True, db_column="activo")
-    fecha_creacion = models.DateTimeField(
-        auto_now_add=True, db_column="fechaCreacion"
-    )
-    ultimo_acceso = models.DateTimeField(
-        null=True, blank=True, db_column="ultimoAcceso"
-    )
+    is_active = models.BooleanField(default=True, db_column="activo")
+    date_joined = models.DateTimeField(auto_now_add=True, db_column="fechaCreacion")
+    last_login = models.DateTimeField(null=True, blank=True, db_column="ultimoAcceso")
+
+    # Campos que `createsuperuser` pedira ademas del username.
+    REQUIRED_FIELDS = ["email", "nombre_usuario"]
 
     class Meta:
         db_table = "usuario"
@@ -240,7 +271,7 @@ class Venta(models.Model):
         related_name="ventas",
     )
     usuario = models.ForeignKey(
-        Usuario,
+        settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         db_column="idUsuario",
         related_name="ventas",
@@ -297,7 +328,7 @@ class Entrada(models.Model):
         related_name="entradas",
     )
     usuario = models.ForeignKey(
-        Usuario,
+        settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         db_column="idUsuario",
         related_name="entradas",
@@ -370,7 +401,7 @@ class Gasto(models.Model):
         max_length=200, null=True, blank=True, db_column="observaciones"
     )
     usuario = models.ForeignKey(
-        Usuario,
+        settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         db_column="idUsuario",
         related_name="gastos",

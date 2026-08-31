@@ -1,0 +1,434 @@
+/* ---------------------------------------------------------------------
+   1. Variables (paleta neutra profesional, sin trabajo de branding)
+--------------------------------------------------------------------- */
+:root {
+    /* Fondo de la ventana, detras de la tarjeta de la app. Se ve en el
+       margen y en el recorte de las 4 esquinas redondeadas. */
+    --color-page-bg: #000000;
+    --color-bg: #f4f5f7;
+    --color-surface: #ffffff;
+    --color-text: #1f2430;
+    --color-text-muted: #6b7280;
+    --color-border: #e2e4e9;
+
+    --color-primary: #2f6690;
+    --color-primary-dark: #244f70;
+    --color-success: #2e7d32;
+    --color-success-bg: #eaf6ea;
+    --color-warning: #a15c00;
+    --color-warning-bg: #fdf1de;
+    --color-danger: #c62828;
+    --color-danger-bg: #fbe9e9;
+    --color-info: #2f6690;
+    --color-info-bg: #e8f1f7;
+
+    /* Naranja del logo. SOLO sobre fondos oscuros (sidebar): sobre blanco
+       da 2.26:1 de contraste y no pasa WCAG AA. */
+    --color-accent: #fe912f;
+
+    --sidebar-bg: #0f2438;
+    --sidebar-text: rgba(255, 255, 255, 0.85);
+    --sidebar-text-active: #ffffff;
+    --sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+    --sidebar-active-bg: rgba(255, 255, 255, 0.15);
+
+    --sidebar-width: 216px;
+    --topbar-height: 56px;
+    /* Margen entre la ventana y la tarjeta de la app. Una sola variable
+       porque .app-shell necesita el mismo valor para su calc() de alto:
+       si algun dia cambia, se cambia UNA vez y los dos usos quedan en sync.
+       Valor propio (no --spacing-1): es un caso especial "casi sin margen",
+       no un espaciado que se vaya a reutilizar en otro lado. */
+    --shell-margin: 2px;
+    /* Escala de radios: el redondeo crece con el tamano del elemento */
+    --radius-sm: 6px;    /* detalles chicos: hamburguesa, cerrar alerta */
+    --radius: 10px;      /* botones, alertas, nav, logo, foco */
+    --radius-lg: 14px;   /* elementos grandes: tablas, tarjetas */
+    --radius-xl: 16px;   /* la tarjeta de toda la app (app-shell) */
+    /* Escala de sombras (elevacion): mas capas y mas difusion = "mas alto"
+       se ve sobre la pagina. Dos sombras superpuestas (una ceñida + una
+       difusa) leen mas natural que una sola sombra dura. Negro puro
+       (0,0,0), no el azulado rgba(15,23,42,...) que tenia antes. */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.10);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.08), 0 6px 16px rgba(0, 0, 0, 0.12);
+    --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.14), 0 24px 48px rgba(0, 0, 0, 0.18);
+    --spacing-1: 4px;
+    --spacing-2: 8px;
+    --spacing-3: 16px;
+    --spacing-4: 24px;
+}
+
+/* ---------------------------------------------------------------------
+   2. Reset basico
+--------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: var(--shell-margin);
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--color-text);
+    background: var(--color-page-bg);
+}
+
+ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+h1, h2, h3 {
+    margin: 0 0 var(--spacing-3);
+}
+
+/* Foco visible al navegar con teclado (WCAG 2.4.7) — no se quita el
+   focus por defecto, se reemplaza por uno consistente con la paleta */
+a:focus-visible,
+button:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius);
+}
+
+.sidebar__nav .nav-link:focus-visible {
+    outline-color: #ffffff;
+}
+
+/* ---------------------------------------------------------------------
+   3. Layout: topbar + sidebar + contenido
+--------------------------------------------------------------------- */
+.app-shell {
+    /* Alto de la ventana menos el padding del body (arriba y abajo),
+       para que la tarjeta entre justo y no aparezca scroll de mas */
+    min-height: calc(100vh - var(--shell-margin) * 2);
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-rows: var(--topbar-height) 1fr;
+    grid-template-areas:
+        "sidebar topbar"
+        "sidebar content";
+    background: var(--color-bg);
+    border-radius: var(--radius-xl);
+    /* Necesario para que el sidebar y el topbar respeten las esquinas
+       curvas del contenedor: sin esto sobresaldrian en cuadrado */
+    overflow: hidden;
+    /* La sombra mas grande de la escala: es la tarjeta que "flota" mas
+       alto sobre toda la pagina */
+    box-shadow: var(--shadow-lg);
+}
+
+.topbar {
+    grid-area: topbar;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: 0 var(--spacing-4);
+    background: var(--color-surface);
+    /* Sombra chica: separa el topbar del contenido de abajo, no de la
+       pagina (eso ya lo hace la sombra grande del app-shell) */
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    z-index: 10;
+}
+
+.topbar__user {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+.topbar__user svg {
+    width: 20px;
+    height: 20px;
+}
+
+.sidebar {
+    grid-area: sidebar;
+    background: var(--sidebar-bg);
+}
+
+.sidebar__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    height: var(--topbar-height);
+    padding: 0 var(--spacing-3);
+    color: var(--sidebar-text-active);
+    font-weight: 600;
+    font-size: 1.05rem;
+    border-bottom: 2px solid var(--color-accent);
+}
+
+.sidebar__logo {
+    height: 36px;
+    width: auto;
+    /* el jpeg tiene fondo blanco solido (sin transparencia): le damos una
+       tarjeta blanca propia en vez de dejarlo flotando sobre el azul oscuro */
+    background: #ffffff;
+    padding: 3px;
+    border-radius: var(--radius);
+}
+
+.sidebar__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--spacing-3) var(--spacing-2);
+}
+
+.sidebar__nav .nav-link {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2);
+    border-radius: var(--radius);
+    color: var(--sidebar-text);
+    /* Reservado en transparente desde el inicio: si no, el borde apareceria
+       "de la nada" en vez de solo cambiar de color, y el link saltaria 2px */
+    border-bottom: 2px solid transparent;
+    border-right: 2px solid transparent;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar__nav .nav-link svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.sidebar__nav .nav-link:hover {
+    background: var(--sidebar-hover-bg);
+    color: var(--sidebar-text-active);
+}
+
+.sidebar__nav .nav-link.active {
+    color: var(--sidebar-text-active);
+    background: var(--sidebar-active-bg);
+    font-weight: 600;
+}
+
+/* Franja naranja: se suma al sombreado de arriba, no lo reemplaza */
+.sidebar__nav .nav-link:hover,
+.sidebar__nav .nav-link.active {
+    border-bottom-color: var(--color-accent);
+    border-right-color: var(--color-accent);
+}
+
+.sidebar__nav .nav-link.active svg {
+    color: var(--color-accent);
+}
+
+.content {
+    grid-area: content;
+    padding: var(--spacing-4);
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.page-header {
+    margin-bottom: var(--spacing-4);
+}
+
+/* Boton hamburguesa: solo se ve en mobile (ver media query abajo) */
+.sidebar-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+    background: var(--color-bg);
+}
+
+.sidebar-toggle span {
+    display: block;
+    height: 2px;
+    background: var(--color-text);
+    border-radius: 1px;
+}
+
+.sidebar-backdrop {
+    display: none;
+}
+
+/* ---------------------------------------------------------------------
+   4. Mobile: sidebar fuera de pantalla, se abre con JS (base.js)
+--------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    /* En mobile la app va de borde a borde (full bleed): el sidebar es
+       position:fixed contra la ventana, asi que un margen lo desalinearia */
+    body {
+        padding: 0;
+    }
+
+    .app-shell {
+        min-height: 100vh;
+        border-radius: 0;
+        box-shadow: none;
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "topbar"
+            "content";
+    }
+
+    .sidebar-toggle {
+        display: inline-flex;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: var(--topbar-height);
+        bottom: 0;
+        left: 0;
+        width: var(--sidebar-width);
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        z-index: 40;
+    }
+
+    .sidebar.sidebar--open {
+        transform: translateX(0);
+    }
+
+    .sidebar-backdrop.sidebar-backdrop--visible {
+        display: block;
+        position: fixed;
+        inset: var(--topbar-height) 0 0 0;
+        background: rgba(0, 0, 0, 0.35);
+        z-index: 30;
+    }
+}
+
+/* ---------------------------------------------------------------------
+   5. Componentes compartidos: alertas, botones, tablas
+--------------------------------------------------------------------- */
+.messages {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-4);
+}
+
+.alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-3);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    box-shadow: var(--shadow-sm);
+}
+
+.alert__body {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.alert__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.alert-success { background: var(--color-success-bg); color: var(--color-success); }
+.alert-warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.alert-error   { background: var(--color-danger-bg);  color: var(--color-danger); }
+.alert-info,
+.alert-debug   { background: var(--color-info-bg);    color: var(--color-info); }
+
+.alert__close {
+    border: none;
+    background: transparent;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    color: inherit;
+    border-radius: var(--radius-sm);
+    padding: 2px 6px;
+    transition: background-color 0.15s ease;
+}
+
+.alert__close:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:hover {
+    background: var(--color-bg);
+}
+
+.btn-primary {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(47, 102, 144, 0.25);
+}
+
+.btn-primary:hover {
+    background: var(--color-primary-dark);
+    box-shadow: 0 2px 6px rgba(47, 102, 144, 0.3);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+th, td {
+    text-align: left;
+    padding: var(--spacing-2) var(--spacing-3);
+    border-bottom: 1px solid var(--color-border);
+}
+
+th {
+    background: var(--color-bg);
+    font-weight: 600;
+}
+
+tbody tr:hover {
+    background: var(--color-bg);
+}

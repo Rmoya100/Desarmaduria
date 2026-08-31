@@ -66,7 +66,7 @@ ROOT_URLCONF = 'desarmaduria.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -99,6 +99,12 @@ DATABASES = {
         },
     }
 }
+
+
+# Modelo de usuario propio (hereda de AbstractUser).
+# https://docs.djangoproject.com/en/stable/topics/auth/customizing/#substituting-a-custom-user-model
+# IMPORTANTE: cambiar este valor DESPUES de la primera migracion es muy costoso.
+AUTH_USER_MODEL = 'inventario.Usuario'
 
 
 # Password validation
@@ -136,6 +142,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [BASE_DIR / 'static']
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
