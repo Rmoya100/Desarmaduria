@@ -11,15 +11,14 @@ Espera en el contexto: form, cancelar_url.
     {% endif %}
     {% for field in form %}
     <div class="field">
-        {% if field.field.widget.input_type == 'checkbox' %}
+        {% if field.field.widget.allow_multiple_selected %}
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        <div class="checkbox-grid">{{ field }}</div>
+        {% elif field.field.widget.input_type == 'checkbox' %}
         <label class="field--checkbox">{{ field }} {{ field.label }}</label>
         {% else %}
         <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-        {% if field.field.widget.allow_multiple_selected %}
-        <div class="checkbox-grid">{{ field }}</div>
-        {% else %}
         {{ field }}
-        {% endif %}
         {% endif %}
         {% if field.help_text %}<span class="help-text">{{ field.help_text }}</span>{% endif %}
         {% if field.errors %}
