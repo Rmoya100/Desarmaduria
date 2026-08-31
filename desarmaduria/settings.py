@@ -106,6 +106,10 @@ DATABASES = {
 # IMPORTANTE: cambiar este valor DESPUES de la primera migracion es muy costoso.
 AUTH_USER_MODEL = 'inventario.Usuario'
 
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'dashboard'
+LOGOUT_REDIRECT_URL = 'login'
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators

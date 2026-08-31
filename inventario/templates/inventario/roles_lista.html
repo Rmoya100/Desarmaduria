@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Roles y permisos · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Roles y permisos</h1>
+    {% if puede_crear %}
+    <a href="{% url 'rol_crear' %}" class="btn btn-primary">+ Nuevo rol</a>
+    {% endif %}
+</div>
+
+{% include "inventario/_config_tabs.html" with seccion_activa="roles" %}
+
+{% if roles %}
+<table>
+    <thead>
+        <tr>
+            <th>Rol</th>
+            <th>Permisos</th>
+            {% if puede_editar %}<th></th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for rol in roles %}
+        <tr>
+            <td>{{ rol.nombre_rol }}</td>
+            <td>{{ rol.rol_permisos.count }} permiso{{ rol.rol_permisos.count|pluralize }}</td>
+            {% if puede_editar %}
+            <td class="table-actions">
+                <a href="{% url 'rol_editar' rol.pk %}" class="btn btn-sm">Editar</a>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">No hay roles registrados.</div>
+{% endif %}
+{% endblock %}
