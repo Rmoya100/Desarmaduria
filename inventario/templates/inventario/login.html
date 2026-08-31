@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar sesión · Desarmaduría</title>
+    <link rel="icon" href="{% static 'imagen/logo.webp' %}">
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <div class="login-card__logo">
+                <img src="{% static 'imagen/logo.webp' %}" alt="Logo Desarmaduría">
+            </div>
+            <h1>Desarmaduría</h1>
+            {% if form.non_field_errors %}
+            <ul class="errorlist">
+                {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+            <form method="post">
+                {% csrf_token %}
+                <div class="field">
+                    <label for="{{ form.username.id_for_label }}">Usuario</label>
+                    {{ form.username }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.password.id_for_label }}">Contraseña</label>
+                    {{ form.password }}
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary login-card__submit">Ingresar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

@@ -30,3 +30,7 @@ local_settings.py
 .idea/
 .DS_Store
 Thumbs.db
+
+#claude
+.claude/
+claude/
