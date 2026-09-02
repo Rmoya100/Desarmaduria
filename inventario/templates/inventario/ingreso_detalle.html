@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Ingreso #{{ entrada.id_entrada }} · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Ingreso #{{ entrada.id_entrada }}</h1>
+    <a href="{% url 'ingresos' %}" class="btn">Volver</a>
+</div>
+
+{% include "inventario/_inventario_tabs.html" with seccion_activa=seccion_activa %}
+
+<div class="form-card">
+    <p><strong>Fecha:</strong> {{ entrada.fecha }}</p>
+    <p><strong>Documento:</strong> {{ entrada.get_tipo_documento_display }}</p>
+    <p><strong>Vehículo:</strong> {{ entrada.vehiculo.modelo }} ({{ entrada.vehiculo.anio }}){% if entrada.vehiculo.patente %} · {{ entrada.vehiculo.patente }}{% endif %}</p>
+    <p><strong>Registró:</strong> {{ entrada.usuario.username }} — {{ entrada.fecha_registro }}</p>
+</div>
+
+{% if detalles %}
+<table>
+    <thead>
+        <tr>
+            <th>Producto</th>
+            <th>Categoría</th>
+            <th>Cantidad</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for d in detalles %}
+        <tr>
+            <td>{{ d.producto.nombre }}</td>
+            <td>{{ d.producto.categoria.nombre_categoria }}</td>
+            <td>{{ d.cantidad }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <th colspan="2">Total piezas</th>
+            <th>{{ total_piezas }}</th>
+        </tr>
+    </tfoot>
+</table>
+{% else %}
+<div class="empty-state">Este ingreso no tiene líneas.</div>
+{% endif %}
+{% endblock %}

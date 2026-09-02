@@ -1,18 +1,184 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import ProtectedError
+from django.db.models import (
+    Count,
+    F,
+    IntegerField,
+    OuterRef,
+    ProtectedError,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
+from django.db import transaction
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .forms import FormaPagoForm, RolForm, TipoDocumentoForm, UsuarioForm
-from .models import FormaPago, Rol, TipoDocumento, Usuario
+from .forms import (
+    DetalleEntradaFormSet,
+    EntradaForm,
+    FormaPagoForm,
+    RolForm,
+    TipoDocumentoForm,
+    UsuarioForm,
+)
+from .models import (
+    Categoria,
+    DetalleEntrada,
+    DetalleVenta,
+    Entrada,
+    FormaPago,
+    Producto,
+    Rol,
+    TipoDocumento,
+    Usuario,
+    Vehiculo,
+)
 from .permisos import permiso_requerido, tiene_permiso
 
 
 @login_required
 def en_construccion(request, titulo):
     return render(request, "inventario/en_construccion.html", {"titulo": titulo})
+
+
+# ---------------------------------------------------------------------------
+# Inventario (existencias + ingresos)
+#
+# No hay tabla de stock: el saldo de cada producto se deriva de
+#   sum(DetalleEntrada.cantidad) - sum(DetalleVenta.cantidad)
+# calculado con subconsultas para no multiplicar filas al unir ambas
+# relaciones en la misma query.
+# ---------------------------------------------------------------------------
+def _productos_con_stock():
+    entradas = (
+        DetalleEntrada.objects.filter(producto=OuterRef("pk"))
+        .values("producto")
+        .annotate(total=Sum("cantidad"))
+        .values("total")
+    )
+    salidas = (
+        DetalleVenta.objects.filter(producto=OuterRef("pk"))
+        .values("producto")
+        .annotate(total=Sum("cantidad"))
+        .values("total")
+    )
+    return (
+        Producto.objects.select_related(
+            "categoria", "vehiculo__modelo__marca"
+        )
+        .annotate(
+            total_entradas=Coalesce(
+                Subquery(entradas, output_field=IntegerField()), Value(0)
+            ),
+            total_salidas=Coalesce(
+                Subquery(salidas, output_field=IntegerField()), Value(0)
+            ),
+        )
+        .annotate(stock=F("total_entradas") - F("total_salidas"))
+    )
+
+
+@login_required
+def inventario_lista(request):
+    productos = _productos_con_stock()
+
+    q = request.GET.get("q", "").strip()
+    categoria = request.GET.get("categoria", "").strip()
+    vehiculo = request.GET.get("vehiculo", "").strip()
+    disponibilidad = request.GET.get("stock", "").strip()
+
+    if q:
+        productos = productos.filter(nombre__icontains=q)
+    if categoria.isdigit():
+        productos = productos.filter(categoria_id=categoria)
+    if vehiculo.isdigit():
+        productos = productos.filter(vehiculo_id=vehiculo)
+    if disponibilidad == "con":
+        productos = productos.filter(stock__gt=0)
+    elif disponibilidad == "sin":
+        productos = productos.filter(stock__lte=0)
+
+    contexto = {
+        "titulo": "Inventario",
+        "seccion_activa": "existencias",
+        "productos": productos.order_by("nombre"),
+        "categorias": Categoria.objects.order_by("nombre_categoria"),
+        "vehiculos": Vehiculo.objects.select_related("modelo__marca").order_by(
+            "modelo__marca__nombre_marca", "modelo__nombre_modelo", "anio"
+        ),
+        "filtros": {
+            "q": q,
+            "categoria": categoria,
+            "vehiculo": vehiculo,
+            "stock": disponibilidad,
+        },
+    }
+    return render(request, "inventario/inventario_lista.html", contexto)
+
+
+@login_required
+def ingresos_lista(request):
+    entradas = (
+        Entrada.objects.select_related("vehiculo__modelo__marca", "usuario")
+        .annotate(
+            total_piezas=Coalesce(Sum("detalles__cantidad"), Value(0)),
+            total_lineas=Count("detalles", distinct=True),
+        )
+        .order_by("-fecha", "-id_entrada")
+    )
+    contexto = {
+        "titulo": "Inventario",
+        "seccion_activa": "ingresos",
+        "entradas": entradas,
+    }
+    return render(request, "inventario/ingresos_lista.html", contexto)
+
+
+@login_required
+def entrada_crear(request):
+    form = EntradaForm(request.POST or None)
+    formset = DetalleEntradaFormSet(request.POST or None)
+
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        with transaction.atomic():
+            entrada = form.save(commit=False)
+            entrada.usuario = request.user
+            entrada.save()
+            formset.instance = entrada
+            formset.save()
+        messages.success(request, "Ingreso registrado correctamente.")
+        return redirect("ingreso_detalle", pk=entrada.pk)
+
+    contexto = {
+        "titulo": "Nuevo ingreso",
+        "seccion_activa": "ingresos",
+        "form": form,
+        "formset": formset,
+    }
+    return render(request, "inventario/entrada_form.html", contexto)
+
+
+@login_required
+def ingreso_detalle(request, pk):
+    entrada = get_object_or_404(
+        Entrada.objects.select_related("vehiculo__modelo__marca", "usuario"),
+        pk=pk,
+    )
+    detalles = entrada.detalles.select_related("producto__categoria").order_by(
+        "producto__nombre"
+    )
+    contexto = {
+        "titulo": "Inventario",
+        "seccion_activa": "ingresos",
+        "entrada": entrada,
+        "detalles": detalles,
+        "total_piezas": sum(d.cantidad for d in detalles),
+    }
+    return render(request, "inventario/ingreso_detalle.html", contexto)
 
 
 # ---------------------------------------------------------------------------

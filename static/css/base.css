@@ -466,6 +466,45 @@ tbody tr:hover {
     color: #fff;
 }
 
+.inv-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+    align-items: center;
+    margin-bottom: var(--spacing-4);
+}
+
+.inv-filtros .input-control {
+    width: auto;
+    min-width: 160px;
+}
+
+.form-card--wide {
+    max-width: 760px;
+}
+
+.detalle-titulo {
+    font-size: 1rem;
+    margin: var(--spacing-4) 0 var(--spacing-2);
+}
+
+.detalle-tabla {
+    margin-bottom: var(--spacing-3);
+}
+
+.detalle-tabla .col-cantidad {
+    width: 120px;
+}
+
+.detalle-tabla .col-quitar {
+    width: 90px;
+    white-space: nowrap;
+}
+
+.detalle-fila td[hidden] {
+    display: none;
+}
+
 .form-card {
     max-width: 560px;
     background: var(--color-surface);

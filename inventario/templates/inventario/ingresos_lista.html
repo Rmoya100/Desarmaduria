@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Ingresos · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Inventario</h1>
+    <a href="{% url 'entrada_crear' %}" class="btn btn-primary">+ Nuevo ingreso</a>
+</div>
+
+{% include "inventario/_inventario_tabs.html" with seccion_activa=seccion_activa %}
+
+{% if entradas %}
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Fecha</th>
+            <th>Documento</th>
+            <th>Vehículo (despiece)</th>
+            <th>Líneas</th>
+            <th>Piezas</th>
+            <th>Registró</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in entradas %}
+        <tr>
+            <td>{{ e.id_entrada }}</td>
+            <td>{{ e.fecha }}</td>
+            <td>{{ e.get_tipo_documento_display }}</td>
+            <td>{{ e.vehiculo.modelo }} ({{ e.vehiculo.anio }}){% if e.vehiculo.patente %} · {{ e.vehiculo.patente }}{% endif %}</td>
+            <td>{{ e.total_lineas }}</td>
+            <td>{{ e.total_piezas }}</td>
+            <td>{{ e.usuario.username }}</td>
+            <td class="table-actions">
+                <a href="{% url 'ingreso_detalle' e.pk %}" class="btn btn-sm">Ver</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">Aún no hay ingresos registrados.</div>
+{% endif %}
+{% endblock %}

@@ -319,8 +319,19 @@ class DetalleVenta(models.Model):
 # Entradas de stock
 # ---------------------------------------------------------------------------
 class Entrada(models.Model):
+    class TipoDoc(models.TextChoices):
+        NINGUNO = "NINGUNO", "Ningún documento"
+        BOLETA = "BOLETA", "Boleta"
+        FACTURA = "FACTURA", "Factura"
+
     id_entrada = models.AutoField(primary_key=True, db_column="idEntrada")
     fecha = models.DateField(db_column="fecha")
+    tipo_documento = models.CharField(
+        max_length=10,
+        choices=TipoDoc.choices,
+        default=TipoDoc.NINGUNO,
+        db_column="tipoDocumento",
+    )
     vehiculo = models.ForeignKey(
         Vehiculo,
         on_delete=models.PROTECT,

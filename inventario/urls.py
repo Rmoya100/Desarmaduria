@@ -7,6 +7,10 @@ from inventario.views import (
     catalogo_form,
     catalogo_lista,
     en_construccion,
+    entrada_crear,
+    ingreso_detalle,
+    ingresos_lista,
+    inventario_lista,
     rol_crear,
     rol_editar,
     roles_lista,
@@ -17,7 +21,10 @@ from inventario.views import (
 
 urlpatterns = [
     path('', en_construccion, {'titulo': 'Dashboard'}, name='dashboard'),
-    path('inventario/', en_construccion, {'titulo': 'Inventario'}, name='inventario'),
+    path('inventario/', inventario_lista, name='inventario'),
+    path('inventario/ingresos/', ingresos_lista, name='ingresos'),
+    path('inventario/ingresos/nuevo/', entrada_crear, name='entrada_crear'),
+    path('inventario/ingresos/<int:pk>/', ingreso_detalle, name='ingreso_detalle'),
     path('gastos/', en_construccion, {'titulo': 'Gastos'}, name='gastos'),
     path('reportes/', en_construccion, {'titulo': 'Reportes'}, name='reportes'),
 

@@ -60,7 +60,7 @@
                 <li>
                     <a
                         href="{% url 'inventario' %}"
-                        class="nav-link{% if request.resolver_match.url_name == 'inventario' %} active{% endif %}"
+                        class="nav-link{% if request.resolver_match.url_name == 'inventario' or request.resolver_match.url_name == 'ingresos' or request.resolver_match.url_name == 'ingreso_detalle' %} active{% endif %}"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M21 8l-9-5-9 5 9 5 9-5z"></path>
