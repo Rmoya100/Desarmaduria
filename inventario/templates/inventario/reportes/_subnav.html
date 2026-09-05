@@ -1,0 +1,28 @@
+{% with url_name=request.resolver_match.url_name %}
+<nav class="subnav">
+    <a href="{% url 'reportes' %}" class="subnav__link{% if url_name == 'reportes' %} active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 8l-9-5-9 5 9 5 9-5z"></path>
+            <path d="M3 8v8l9 5 9-5V8"></path>
+            <path d="M12 13v9"></path>
+        </svg>
+        <span>Ventas</span>
+    </a>
+    <a href="{% url 'reporte_utilidad' %}" class="subnav__link{% if url_name == 'reporte_utilidad' %} active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="4" y1="20" x2="20" y2="20"></line>
+            <rect x="6" y="12" width="3.2" height="8" rx="0.8"></rect>
+            <rect x="10.4" y="7" width="3.2" height="13" rx="0.8"></rect>
+            <rect x="14.8" y="3.5" width="3.2" height="16.5" rx="0.8"></rect>
+        </svg>
+        <span>Utilidad</span>
+    </a>
+    <a href="{% url 'reporte_rotacion' %}" class="subnav__link{% if url_name == 'reporte_rotacion' %} active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-3-6.7"></path>
+            <path d="M21 4v5h-5"></path>
+        </svg>
+        <span>Rotación de productos</span>
+    </a>
+</nav>
+{% endwith %}

@@ -15,7 +15,6 @@ from inventario.views import (
     catalogo_form,
     catalogo_lista,
     dashboard,
-    en_construccion,
     gasto_comprobante,
     gasto_comprobante_pdf,
     gastos_exportar_excel,
@@ -43,7 +42,7 @@ urlpatterns = [
     path('gastos/conceptos/nuevo/', ConceptoGastoCreateView.as_view(), name='concepto_crear'),
     path('gastos/conceptos/<int:pk>/editar/', ConceptoGastoUpdateView.as_view(), name='concepto_editar'),
     path('gastos/conceptos/<int:pk>/eliminar/', ConceptoGastoDeleteView.as_view(), name='concepto_eliminar'),
-    path('reportes/', en_construccion, {'titulo': 'Reportes'}, name='reportes'),
+    path('reportes/', include('inventario.reportes.urls')),
 
     path(
         'login/',
