@@ -6,6 +6,7 @@ from inventario.views import (
     catalogo_eliminar,
     catalogo_form,
     catalogo_lista,
+    dashboard,
     en_construccion,
     rol_crear,
     rol_editar,
@@ -16,7 +17,7 @@ from inventario.views import (
 )
 
 urlpatterns = [
-    path('', en_construccion, {'titulo': 'Dashboard'}, name='dashboard'),
+    path('', dashboard, name='dashboard'),
     path('inventario/', en_construccion, {'titulo': 'Inventario'}, name='inventario'),
     path('gastos/', en_construccion, {'titulo': 'Gastos'}, name='gastos'),
     path('reportes/', en_construccion, {'titulo': 'Reportes'}, name='reportes'),

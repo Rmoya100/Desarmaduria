@@ -1,18 +1,106 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import ProtectedError
+from django.db.models import DecimalField, ExpressionWrapper, F, ProtectedError, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
 from .forms import FormaPagoForm, RolForm, TipoDocumentoForm, UsuarioForm
-from .models import FormaPago, Rol, TipoDocumento, Usuario
+from .models import (
+    DetalleEntrada,
+    DetalleVenta,
+    FormaPago,
+    Gasto,
+    Producto,
+    Rol,
+    TipoDocumento,
+    Usuario,
+    Vehiculo,
+    Venta,
+)
 from .permisos import permiso_requerido, tiene_permiso
+
+# Bajo este umbral (entradas - ventas) un producto se marca "bajo stock" en el
+# dashboard. No existe un campo de stock minimo en el schema original, asi
+# que es un valor fijo, ajustable aqui si el negocio define uno propio.
+UMBRAL_BAJO_STOCK = 5
 
 
 @login_required
 def en_construccion(request, titulo):
     return render(request, "inventario/en_construccion.html", {"titulo": titulo})
+
+
+@login_required
+def dashboard(request):
+    hoy = timezone.localdate()
+    inicio_mes = hoy.replace(day=1)
+
+    ventas_mes = Venta.objects.filter(fecha_venta__gte=inicio_mes, fecha_venta__lte=hoy)
+    gastos_mes = Gasto.objects.filter(fecha__gte=inicio_mes, fecha__lte=hoy)
+
+    total_ventas_mes = DetalleVenta.objects.filter(venta__in=ventas_mes).aggregate(
+        total=Sum(
+            ExpressionWrapper(
+                F("cantidad") * F("precio"),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        )
+    )["total"] or Decimal("0")
+    total_gastos_mes = gastos_mes.aggregate(total=Sum("monto"))["total"] or Decimal("0")
+
+    # Sumas por separado (no un .annotate() combinado): sumar dos relaciones
+    # inversas distintas (entradas y ventas) en la misma anotacion duplica
+    # filas por el cruce de joins y da totales inflados.
+    entradas_por_producto = dict(
+        DetalleEntrada.objects.values("producto_id")
+        .annotate(total=Sum("cantidad"))
+        .values_list("producto_id", "total")
+    )
+    ventas_por_producto = dict(
+        DetalleVenta.objects.values("producto_id")
+        .annotate(total=Sum("cantidad"))
+        .values_list("producto_id", "total")
+    )
+    productos_bajo_stock = sorted(
+        (
+            {"producto": producto, "stock": entradas_por_producto.get(producto.pk, 0) - ventas_por_producto.get(producto.pk, 0)}
+            for producto in Producto.objects.select_related("categoria")
+        ),
+        key=lambda item: item["stock"],
+    )
+    productos_bajo_stock = [
+        item for item in productos_bajo_stock if item["stock"] <= UMBRAL_BAJO_STOCK
+    ][:8]
+
+    top_productos = (
+        DetalleVenta.objects.values("producto__nombre")
+        .annotate(cantidad_total=Sum("cantidad"))
+        .order_by("-cantidad_total")[:5]
+    )
+
+    contexto = {
+        "total_ventas_mes": total_ventas_mes,
+        "cantidad_ventas_mes": ventas_mes.count(),
+        "total_gastos_mes": total_gastos_mes,
+        "cantidad_gastos_mes": gastos_mes.count(),
+        "utilidad_mes": total_ventas_mes - total_gastos_mes,
+        "total_productos": Producto.objects.count(),
+        "total_vehiculos": Vehiculo.objects.count(),
+        "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+        "productos_bajo_stock": productos_bajo_stock,
+        "top_productos": top_productos,
+        "ventas_recientes": Venta.objects.select_related(
+            "tipo_documento", "forma_pago", "usuario"
+        ).order_by("-fecha_venta", "-id_venta")[:5],
+        "gastos_recientes": Gasto.objects.select_related("concepto", "usuario").order_by(
+            "-fecha", "-id_gasto"
+        )[:5],
+    }
+    return render(request, "inventario/dashboard.html", contexto)
 
 
 # ---------------------------------------------------------------------------
