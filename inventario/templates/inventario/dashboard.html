@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <span class="stat-card__label">Ventas del mes</span>
+        <span class="stat-card__value">${{ total_ventas_mes|floatformat:0 }}</span>
+        <span class="stat-card__meta">{{ cantidad_ventas_mes }} venta{{ cantidad_ventas_mes|pluralize }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-card__label">Gastos del mes</span>
+        <span class="stat-card__value">${{ total_gastos_mes|floatformat:0 }}</span>
+        <span class="stat-card__meta">{{ cantidad_gastos_mes }} gasto{{ cantidad_gastos_mes|pluralize }}</span>
+    </div>
+    <div class="stat-card{% if utilidad_mes < 0 %} stat-card--negativo{% endif %}">
+        <span class="stat-card__label">Utilidad del mes</span>
+        <span class="stat-card__value">${{ utilidad_mes|floatformat:0 }}</span>
+        <span class="stat-card__meta">Ventas − gastos</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-card__label">Bajo stock</span>
+        <span class="stat-card__value">{{ productos_bajo_stock|length }}</span>
+        <span class="stat-card__meta">Umbral: {{ umbral_bajo_stock }} unidades</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-card__label">Productos registrados</span>
+        <span class="stat-card__value">{{ total_productos }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-card__label">Vehículos registrados</span>
+        <span class="stat-card__value">{{ total_vehiculos }}</span>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <section class="panel">
+        <h2>Ventas recientes</h2>
+        {% if ventas_recientes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Documento</th>
+                    <th>Forma de pago</th>
+                    <th>Registrado por</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in ventas_recientes %}
+                <tr>
+                    <td>{{ v.fecha_venta }}</td>
+                    <td>{{ v.tipo_documento }}</td>
+                    <td>{{ v.forma_pago }}</td>
+                    <td>{{ v.usuario }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">Sin ventas registradas.</div>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <h2>Gastos recientes</h2>
+        {% if gastos_recientes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Concepto</th>
+                    <th>Monto</th>
+                    <th>Registrado por</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in gastos_recientes %}
+                <tr>
+                    <td>{{ g.fecha }}</td>
+                    <td>{{ g.concepto }}</td>
+                    <td>${{ g.monto|floatformat:0 }}</td>
+                    <td>{{ g.usuario }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">Sin gastos registrados.</div>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <h2>Productos más vendidos <span class="panel__subtitulo">(histórico)</span></h2>
+        {% if top_productos %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cantidad vendida</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in top_productos %}
+                <tr>
+                    <td>{{ item.producto__nombre }}</td>
+                    <td>{{ item.cantidad_total }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">Sin ventas registradas.</div>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <h2>Productos con bajo stock</h2>
+        {% if productos_bajo_stock %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Stock</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in productos_bajo_stock %}
+                <tr>
+                    <td>{{ item.producto.nombre }}</td>
+                    <td>
+                        <span class="badge {% if item.stock <= 0 %}badge-danger{% else %}badge-warning{% endif %}">
+                            {{ item.stock }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">Todos los productos tienen stock suficiente.</div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
