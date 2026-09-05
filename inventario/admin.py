@@ -91,8 +91,15 @@ class VehiculoAdmin(admin.ModelAdmin):
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "categoria", "vehiculo", "costo")
-    list_filter = ("categoria",)
+    list_display = (
+        "nombre",
+        "categoria",
+        "vehiculo",
+        "costo",
+        "fecha_eliminacion",
+        "eliminado_por",
+    )
+    list_filter = ("categoria", "fecha_eliminacion")
     search_fields = ("nombre",)
 
 

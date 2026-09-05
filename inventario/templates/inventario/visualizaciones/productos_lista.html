@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
+{% block title %}Productos · Inventario{% endblock %}
+
+{% block content %}
+<form method="get" class="product-filtros">
+    <div class="inventory-toolbar">
+        <div class="inventory-toolbar__fields inventory-toolbar__fields--busqueda">
+            <div class="filter-field">
+                <label for="filtro-nombre">Producto</label>
+                <input type="search" id="filtro-nombre" class="input-control" name="nombre" value="{{ filtro.nombre.value|default:'' }}" placeholder="Buscar producto">
+            </div>
+            <div class="filter-field">
+                <label for="filtro-categoria">Categoría</label>
+                <input type="search" id="filtro-categoria" class="input-control" name="categoria" value="{{ filtro.categoria.value|default:'' }}" placeholder="Buscar categoría">
+            </div>
+            <div class="filter-field">
+                <label for="filtro-vehiculo">Vehículo</label>
+                <input type="search" id="filtro-vehiculo" class="input-control" name="vehiculo" value="{{ filtro.vehiculo.value|default:'' }}" placeholder="Marca, modelo o patente">
+            </div>
+        </div>
+        <div class="inventory-toolbar__actions">
+            <noscript><button type="submit" class="btn btn-primary">Buscar</button></noscript>
+            <a href="{% url 'productos_lista' %}" class="btn" data-limpiar>Limpiar</a>
+        </div>
+    </div>
+
+    <section class="table-panel">
+        <div class="table-panel__header">
+            <div>
+                <h2>Productos registrados</h2>
+                <p class="table-count">{{ productos|length }} productos encontrados</p>
+            </div>
+            <a href="#producto-modal" class="btn btn-primary" data-modal-open="producto-modal">Nuevo producto</a>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table productos-tabla">
+                <thead>
+                    <tr>
+                        <th>
+                            <span class="col-head">Producto
+                                <span class="col-sort" role="group" aria-label="Ordenar por producto">
+                                    <button type="submit" name="orden" value="nombre" data-orden="nombre" class="col-sort__btn{% if orden_actual == 'nombre' %} is-active{% endif %}" title="Ordenar A-Z" aria-label="Ordenar producto de A a Z">A-Z</button>
+                                    <button type="submit" name="orden" value="-nombre" data-orden="-nombre" class="col-sort__btn{% if orden_actual == '-nombre' %} is-active{% endif %}" title="Ordenar Z-A" aria-label="Ordenar producto de Z a A">Z-A</button>
+                                </span>
+                            </span>
+                        </th>
+                        <th>
+                            <span class="col-head">Categoría
+                                <span class="col-sort" role="group" aria-label="Ordenar por categoría">
+                                    <button type="submit" name="orden" value="categoria" data-orden="categoria" class="col-sort__btn{% if orden_actual == 'categoria' %} is-active{% endif %}" title="Ordenar A-Z" aria-label="Ordenar categoría de A a Z">A-Z</button>
+                                    <button type="submit" name="orden" value="-categoria" data-orden="-categoria" class="col-sort__btn{% if orden_actual == '-categoria' %} is-active{% endif %}" title="Ordenar Z-A" aria-label="Ordenar categoría de Z a A">Z-A</button>
+                                </span>
+                            </span>
+                        </th>
+                        <th>Vehículo</th>
+                        <th>
+                            <span class="col-head">Costo
+                                <span class="col-sort" role="group" aria-label="Ordenar por costo">
+                                    <button type="submit" name="orden" value="costo" data-orden="costo" class="col-sort__btn col-sort__btn--arrow{% if orden_actual == 'costo' %} is-active{% endif %}" title="Más baratos primero" aria-label="Ordenar costo de menor a mayor">&#9650;</button>
+                                    <button type="submit" name="orden" value="-costo" data-orden="-costo" class="col-sort__btn col-sort__btn--arrow{% if orden_actual == '-costo' %} is-active{% endif %}" title="Más caros primero" aria-label="Ordenar costo de mayor a menor">&#9660;</button>
+                                </span>
+                            </span>
+                        </th>
+                        <th class="table-actions-cell">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for producto in productos %}
+                <tr>
+                    <td><strong>{{ producto.nombre }}</strong></td>
+                    <td>{{ producto.categoria.nombre_categoria }}</td>
+                    <td>{% if producto.vehiculo %}{{ producto.vehiculo }}{% else %}<span class="inventory-muted">Sin vehículo informado</span>{% endif %}</td>
+                    <td>${{ producto.costo|default:0|floatformat:0 }}</td>
+                    <td class="table-actions-cell"><a href="#editar-{{ producto.pk }}" class="btn btn-sm" data-modal-open="editar-{{ producto.pk }}">Editar</a><a href="#eliminar-{{ producto.pk }}" class="btn btn-sm btn-danger" data-modal-open="eliminar-{{ producto.pk }}">Eliminar</a></td>
+                </tr>
+                {% empty %}<tr><td colspan="5" class="empty-state">No hay productos registrados.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</form>
+
+{% for producto in productos %}
+<div class="inventory-modal" id="editar-{{ producto.pk }}" aria-hidden="true">
+    <div class="inventory-modal__dialog">
+        <a href="#" class="inventory-modal__close" data-modal-close aria-label="Cerrar">&times;</a>
+        <h2>Editar producto</h2>
+        <div class="inventory-modal__body" data-edit-url="{% url 'producto_editar' producto.pk %}?partial=1">
+            <p class="inventory-muted">Cargando formulario…</p>
+        </div>
+    </div>
+</div>
+<div class="inventory-modal" id="eliminar-{{ producto.pk }}" aria-hidden="true">
+    <div class="inventory-modal__dialog">
+        <a href="#" class="inventory-modal__close" data-modal-close aria-label="Cerrar">&times;</a>
+        <h2>Eliminar producto</h2>
+        <form method="post" action="{% url 'producto_eliminar' producto.pk %}">
+            {% csrf_token %}
+            <p>¿Eliminar <strong>{{ producto.nombre }}</strong>?</p>
+            <label class="inventory-confirmation"><input type="checkbox" name="confirmar_eliminacion" value="1" required> Confirmo que deseo eliminar este producto.</label>
+            <div class="inventory-modal__actions"><a href="#" class="btn" data-modal-close>Cancelar</a><button class="btn btn-danger" type="submit">Eliminar</button></div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+<div class="inventory-modal{% if abrir_modal %} inventory-modal--open{% endif %}" id="producto-modal" aria-hidden="{% if abrir_modal %}false{% else %}true{% endif %}"><div class="inventory-modal__dialog"><a href="#" class="inventory-modal__close" data-modal-close aria-label="Cerrar">&times;</a><h2>Nuevo producto</h2><form method="post" action="{% url 'producto_crear' %}">{% csrf_token %}{{ form.as_p }}<div class="inventory-modal__actions"><a href="#" class="btn" data-modal-close>Cancelar</a><button class="btn btn-primary" type="submit">Guardar producto</button></div></form></div></div>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/inventario.js' %}"></script>{% endblock %}
