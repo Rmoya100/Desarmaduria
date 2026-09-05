@@ -4,13 +4,36 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import DecimalField, ExpressionWrapper, F, ProtectedError, Sum
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.views.generic import CreateView, DeleteView, ListView, UpdateView
+from openpyxl import Workbook
+from openpyxl.styles import Font
 
-from .forms import FormaPagoForm, RolForm, TipoDocumentoForm, UsuarioForm
-from .models import (DetalleEntrada,DetalleVenta,FormaPago,Gasto,
-    Producto,Rol,TipoDocumento,Usuario,Vehiculo,Venta,)
+from .forms import (
+    ConceptoGastoForm,
+    FormaPagoForm,
+    GastoForm,
+    RolForm,
+    TipoDocumentoForm,
+    UsuarioForm,
+)
+from .models import (
+    ConceptoGasto,
+    DetalleEntrada,
+    DetalleVenta,
+    FormaPago,
+    Gasto,
+    Producto,
+    Rol,
+    TipoDocumento,
+    Usuario,
+    Vehiculo,
+    Venta,
+)
+from .pdf import gasto_comprobante_pdf_bytes, gastos_pdf_bytes
 from .permisos import permiso_requerido, tiene_permiso
 
 # Bajo este umbral (entradas - ventas) un producto se marca "bajo stock" en el
@@ -198,8 +221,144 @@ CATALOGOS = {
     },
 }
 
+
+@login_required
+def catalogo_lista(request, clave):
+    if not tiene_permiso(request.user, clave, "ver"):
+        raise PermissionDenied(f"No tienes permiso para 'ver' en '{clave}'.")
+    cfg = CATALOGOS[clave]
+    items = cfg["model"].objects.order_by("pk")
+    contexto = {
+        "items": items,
+        "cfg": cfg,
+        "clave": clave,
+        "puede_crear": tiene_permiso(request.user, clave, "crear"),
+        "puede_editar": tiene_permiso(request.user, clave, "editar"),
+        "puede_eliminar": tiene_permiso(request.user, clave, "eliminar"),
+    }
+    return render(request, "inventario/catalogo_lista.html", contexto)
+
+
+@login_required
+def catalogo_form(request, clave, pk=None):
+    accion = "editar" if pk else "crear"
+    if not tiene_permiso(request.user, clave, accion):
+        raise PermissionDenied(f"No tienes permiso para '{accion}' en '{clave}'.")
+    cfg = CATALOGOS[clave]
+    instancia = get_object_or_404(cfg["model"], pk=pk) if pk else None
+    form = cfg["form"](request.POST or None, instance=instancia)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Guardado correctamente.")
+        return redirect(cfg["url_lista"])
+    contexto = {
+        "form": form,
+        "titulo": f"Editar {cfg['titulo_singular']}" if instancia else cfg["nuevo"],
+        "cancelar_url": reverse(cfg["url_lista"]),
+        "clave": clave,
+    }
+    return render(request, "inventario/catalogo_form.html", contexto)
+
+
+@login_required
+def catalogo_eliminar(request, clave, pk):
+    if not tiene_permiso(request.user, clave, "eliminar"):
+        raise PermissionDenied(f"No tienes permiso para 'eliminar' en '{clave}'.")
+    cfg = CATALOGOS[clave]
+    instancia = get_object_or_404(cfg["model"], pk=pk)
+    if request.method == "POST":
+        try:
+            instancia.delete()
+            messages.success(request, "Eliminado correctamente.")
+        except ProtectedError:
+            messages.error(
+                request, "No se puede eliminar: está en uso por otros registros."
+            )
+        return redirect(cfg["url_lista"])
+    contexto = {"instancia": instancia, "cfg": cfg, "clave": clave}
+    return render(request, "inventario/catalogo_eliminar.html", contexto)
+
+
+# ---------------------------------------------------------------------------
+# Gastos
+# ---------------------------------------------------------------------------
+def gastos_filtrados(request):
+    """Gastos ordenados por fecha y filtrados por desde/hasta= si vienen
+    en la URL. La usan la lista y las 2 vistas de exportacion, para que las
+    tres apliquen el mismo filtro sin repetir la logica."""
+    queryset = Gasto.objects.select_related(
+        "concepto", "forma_pago", "usuario", "tipo_documento"
+    ).order_by("-fecha")
+    desde = request.GET.get("desde")
+    hasta = request.GET.get("hasta")
+    if desde:
+        queryset = queryset.filter(fecha__gte=desde)
+    if hasta:
+        queryset = queryset.filter(fecha__lte=hasta)
+    return queryset
+
+
+class GastoListView(ListView):
+    model = Gasto
+    context_object_name = "gastos"
+
+    def get_queryset(self):
+        return gastos_filtrados(self.request)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["total"] = self.get_queryset().aggregate(total=Sum("monto"))["total"]
+        context["desde"] = self.request.GET.get("desde", "")
+        context["hasta"] = self.request.GET.get("hasta", "")
+        return context
+
+
+def gastos_exportar_pdf(request):
+    gastos = gastos_filtrados(request)
+    total = gastos.aggregate(total=Sum("monto"))["total"] or 0
+
+    response = HttpResponse(gastos_pdf_bytes(gastos, total), content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="gastos.pdf"'
+    return response
+
+
+def gastos_exportar_excel(request):
+    gastos = gastos_filtrados(request)
+    total = gastos.aggregate(total=Sum("monto"))["total"] or 0
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Gastos"
+
+    encabezados = [
+        "Fecha", "Concepto", "Forma de pago", "Monto",
+        "Tipo Doc.", "N.° Documento", "Observaciones", "Usuario",
+    ]
+    ws.append(encabezados)
+    for celda in ws[1]:
+        celda.font = Font(bold=True)
+
+    for gasto in gastos:
+        ws.append(
+            [
+                gasto.fecha,
+                str(gasto.concepto),
+                str(gasto.forma_pago),
+                gasto.monto,
+                str(gasto.tipo_documento) if gasto.tipo_documento else "",
+                gasto.numero_documento or "",
+                gasto.observaciones or "",
+                str(gasto.usuario),
+            ]
+        )
+
+    fila_total = ws.max_row + 1
+    ws.cell(row=fila_total, column=3, value="Total").font = Font(bold=True)
+    celda_total = ws.cell(row=fila_total, column=4, value=total)
+    celda_total.font = Font(bold=True)
+
     # Formato numerico de Excel (no texto): separa miles/decimales segun el
-    # local del Excel que lo abra, y se puede seguir sumando/ordenado.
+    # locale del Excel que lo abra, y se puede seguir sumando/ordenado.
     for fila in ws.iter_rows(min_row=2, min_col=4, max_col=4):
         for celda in fila:
             celda.number_format = "#,##0.00"
@@ -263,6 +422,9 @@ def gasto_comprobante_pdf(request, pk):
     return response
 
 
+# ---------------------------------------------------------------------------
+# Conceptos de gasto
+# ---------------------------------------------------------------------------
 class ConceptoGastoListView(ListView):
     model = ConceptoGasto
     ordering = "nombre_gasto"
