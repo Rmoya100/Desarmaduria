@@ -8,6 +8,7 @@
     <title>{% block title %}Desarmaduría{% endblock %}</title>
     <link rel="icon" href="{% static 'imagen/logo.webp' %}">
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <div class="app-shell">
@@ -57,10 +58,10 @@
                         <span>Dashboard</span>
                     </a>
                 </li>
-                <li>
+                <li class="nav-group{% if request.resolver_match.url_name == 'inventario_visualizacion' or request.resolver_match.url_name == 'inventario_valorizado' or request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_crear' or request.resolver_match.url_name == 'producto_editar' %} nav-group--active{% endif %}">
                     <a
-                        href="{% url 'inventario' %}"
-                        class="nav-link{% if request.resolver_match.url_name == 'inventario' %} active{% endif %}"
+                        href="{% url 'inventario_visualizacion' %}"
+                        class="nav-link nav-link--parent{% if request.resolver_match.url_name == 'inventario_visualizacion' or request.resolver_match.url_name == 'inventario_valorizado' or request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_crear' or request.resolver_match.url_name == 'producto_editar' %} active{% endif %}"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M21 8l-9-5-9 5 9 5 9-5z"></path>
@@ -69,6 +70,11 @@
                         </svg>
                         <span>Inventario</span>
                     </a>
+                    <ul class="nav-submenu">
+                        <li><a href="{% url 'inventario_visualizacion' %}" class="nav-sublink{% if request.resolver_match.url_name == 'inventario_visualizacion' %} active{% endif %}">Existencias</a></li>
+                        <li><a href="{% url 'inventario_valorizado' %}" class="nav-sublink{% if request.resolver_match.url_name == 'inventario_valorizado' %} active{% endif %}">Inventario valorizado</a></li>
+                        <li><a href="{% url 'productos_lista' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_editar' %} active{% endif %}">Productos</a></li>
+                    </ul>
                 </li>
                 <li>
                     <a
@@ -161,5 +167,6 @@
     </div>
 
     <script src="{% static 'js/base.js' %}"></script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

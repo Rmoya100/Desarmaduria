@@ -1,0 +1,18 @@
+{% with url_name=request.resolver_match.url_name %}
+<nav class="subnav">
+    <a href="{% url 'gastos' %}" class="subnav__link{% if url_name == 'gastos' or url_name == 'gasto_crear' or url_name == 'gasto_editar' or url_name == 'gasto_eliminar' %} active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M12 7.5v9M9.3 9.8c0-1.3 1.2-1.8 2.7-1.8s2.7.6 2.7 1.7-1.2 1.5-2.7 1.8-2.7.5-2.7 1.8 1.2 1.7 2.7 1.7 2.7-.5 2.7-1.7"></path>
+        </svg>
+        <span>Gastos</span>
+    </a>
+    <a href="{% url 'conceptos' %}" class="subnav__link{% if url_name == 'conceptos' or url_name == 'concepto_crear' or url_name == 'concepto_editar' or url_name == 'concepto_eliminar' %} active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12.5 3.5H6A2.5 2.5 0 0 0 3.5 6v6.5a2.5 2.5 0 0 0 .73 1.77l8 8a2.5 2.5 0 0 0 3.54 0l6.5-6.5a2.5 2.5 0 0 0 0-3.54l-8-8a2.5 2.5 0 0 0-1.77-.73z"></path>
+            <circle cx="8.5" cy="8.5" r="1.25" fill="currentColor" stroke="none"></circle>
+        </svg>
+        <span>Conceptos</span>
+    </a>
+</nav>
+{% endwith %}
