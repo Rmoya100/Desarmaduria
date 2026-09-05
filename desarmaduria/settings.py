@@ -135,6 +135,10 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'es-cl'
 
+# Formato numerico propio (separador de miles con punto), ver
+# desarmaduria/formats/es_CL/formats.py
+FORMAT_MODULE_PATH = ['desarmaduria.formats']
+
 TIME_ZONE = 'America/Santiago'
 
 USE_I18N = True
@@ -150,6 +154,10 @@ USE_THOUSAND_SEPARATOR = True
 FORMAT_MODULE_PATH = "desarmaduria.formats"
 
 USE_TZ = True
+
+# Separador de miles en numeros de plantillas (ej. $125.000), segun el
+# formato numerico de es-cl.
+USE_THOUSAND_SEPARATOR = True
 
 
 # Static files (CSS, JavaScript, Images)

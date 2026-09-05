@@ -3,14 +3,10 @@ from django.urls import path
 from django.urls import include
 
 from inventario.views import (
-    ConceptoGastoCreateView,
-    ConceptoGastoDeleteView,
-    ConceptoGastoListView,
-    ConceptoGastoUpdateView,
-    GastoCreateView,
-    GastoDeleteView,
-    GastoListView,
-    GastoUpdateView,
+    catalogo_eliminar,
+    catalogo_form,
+    catalogo_lista,
+    dashboard,
     en_construccion,
     gasto_comprobante,
     gasto_comprobante_pdf,
@@ -19,7 +15,7 @@ from inventario.views import (
 )
 
 urlpatterns = [
-    path('', en_construccion, {'titulo': 'Dashboard'}, name='dashboard'),
+    path('', dashboard, name='dashboard'),
     path('inventario/', en_construccion, {'titulo': 'Inventario'}, name='inventario'),
     path('gastos/', GastoListView.as_view(), name='gastos'),
     path('gastos/nuevo/', GastoCreateView.as_view(), name='gasto_crear'),
