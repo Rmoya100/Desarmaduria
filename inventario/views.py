@@ -93,7 +93,7 @@ def gastos_exportar_excel(request):
     celda_total.font = Font(bold=True)
 
     # Formato numerico de Excel (no texto): separa miles/decimales segun el
-    # locale del Excel que lo abra, y se puede seguir sumando/ordenado.
+    # local del Excel que lo abra, y se puede seguir sumando/ordenado.
     for fila in ws.iter_rows(min_row=2, min_col=4, max_col=4):
         for celda in fila:
             celda.number_format = "#,##0.00"
