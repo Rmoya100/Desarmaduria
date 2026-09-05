@@ -1,0 +1,15 @@
+{% load permisos %}
+<div class="tabs">
+    {% if request.user|tiene_permiso:"usuarios:ver" %}
+    <a href="{% url 'usuarios' %}" class="tab{% if seccion_activa == 'usuarios' %} active{% endif %}">Usuarios</a>
+    {% endif %}
+    {% if request.user|tiene_permiso:"roles:ver" %}
+    <a href="{% url 'roles' %}" class="tab{% if seccion_activa == 'roles' %} active{% endif %}">Roles y permisos</a>
+    {% endif %}
+    {% if request.user|tiene_permiso:"formas_pago:ver" %}
+    <a href="{% url 'formas_pago' %}" class="tab{% if seccion_activa == 'formas_pago' %} active{% endif %}">Formas de pago</a>
+    {% endif %}
+    {% if request.user|tiene_permiso:"documentos:ver" %}
+    <a href="{% url 'documentos' %}" class="tab{% if seccion_activa == 'documentos' %} active{% endif %}">Tipos de documento</a>
+    {% endif %}
+</div>

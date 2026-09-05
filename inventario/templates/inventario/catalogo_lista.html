@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}{{ cfg.titulo }} · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ cfg.titulo }}</h1>
+    {% if puede_crear %}
+    <a href="{% url cfg.url_crear %}" class="btn btn-primary">+ Nuevo</a>
+    {% endif %}
+</div>
+
+{% include "inventario/_config_tabs.html" with seccion_activa=clave %}
+
+{% if items %}
+<table>
+    <thead>
+        <tr>
+            <th>{{ cfg.titulo_singular|capfirst }}</th>
+            {% if puede_editar or puede_eliminar %}<th></th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr>
+            <td>{{ item }}</td>
+            {% if puede_editar or puede_eliminar %}
+            <td class="table-actions">
+                {% if puede_editar %}
+                <a href="{% url cfg.url_editar item.pk %}" class="btn btn-sm">Editar</a>
+                {% endif %}
+                {% if puede_eliminar %}
+                <a href="{% url cfg.url_eliminar item.pk %}" class="btn btn-sm btn-danger">Eliminar</a>
+                {% endif %}
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">No hay registros.</div>
+{% endif %}
+{% endblock %}
