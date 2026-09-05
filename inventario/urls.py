@@ -1,5 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
+from django.urls import include
 
 from inventario.forms import LoginForm
 from inventario.views import (
@@ -14,10 +15,12 @@ from inventario.views import (
     usuario_editar,
     usuarios_lista,
 )
+from inventario.visualizaciones.views import productos_lista
 
 urlpatterns = [
     path('', en_construccion, {'titulo': 'Dashboard'}, name='dashboard'),
-    path('inventario/', en_construccion, {'titulo': 'Inventario'}, name='inventario'),
+    path('inventario/', include('inventario.visualizaciones.urls')),
+    path('inventario/productos/', productos_lista, name='productos_lista'),
     path('gastos/', en_construccion, {'titulo': 'Gastos'}, name='gastos'),
     path('reportes/', en_construccion, {'titulo': 'Reportes'}, name='reportes'),
 

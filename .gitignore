@@ -20,6 +20,13 @@ db.sqlite3-journal
 /media/
 local_settings.py
 
+# Datos y documentación local de pruebas
+docs/
+VENTAS.xlsx
+
+# Tests locales: no compartir entre ramas (inventario/tests.py stub sí se versiona)
+inventario/tests_*.py
+
 # Variables de entorno / secretos
 .env
 .env.*

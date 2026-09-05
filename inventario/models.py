@@ -17,6 +17,7 @@ Notas de portabilidad:
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 
 # ---------------------------------------------------------------------------
@@ -211,14 +212,32 @@ class Producto(models.Model):
         on_delete=models.PROTECT,
         db_column="idVehiculo",
         related_name="productos",
+        null=True,
+        blank=True,
     )
     nombre = models.CharField(max_length=100, db_column="nombre")
     costo = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True, db_column="costo"
     )
+    fecha_eliminacion = models.DateTimeField(
+        null=True, blank=True, db_column="fechaEliminacion"
+    )
+    eliminado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="productos_eliminados",
+        db_column="eliminadoPor",
+    )
 
     class Meta:
         db_table = "producto"
+
+    def eliminar(self, usuario):
+        self.fecha_eliminacion = timezone.now()
+        self.eliminado_por = usuario
+        self.save(update_fields=["fecha_eliminacion", "eliminado_por"])
 
     def __str__(self):
         return self.nombre
@@ -311,6 +330,22 @@ class DetalleVenta(models.Model):
     class Meta:
         db_table = "detalleVenta"
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if not self.producto_id or not self.cantidad:
+            return
+        from .servicios.inventario import productos_con_stock
+
+        producto = productos_con_stock().get(pk=self.producto_id)
+        stock = producto.stock_disponible
+        if self.pk:
+            stock += self.cantidad
+        if self.cantidad > stock:
+            raise ValidationError(
+                {"cantidad": f"Stock insuficiente. Disponible: {stock}."}
+            )
+
     def __str__(self):
         return f"{self.cantidad} x {self.producto} (venta {self.venta_id})"
 
@@ -326,6 +361,8 @@ class Entrada(models.Model):
         on_delete=models.PROTECT,
         db_column="idVehiculo",
         related_name="entradas",
+        null=True,
+        blank=True,
     )
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,

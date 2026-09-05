@@ -13,6 +13,7 @@
 
     --color-primary: #2f6690;
     --color-primary-dark: #244f70;
+
     --color-success: #2e7d32;
     --color-success-bg: #eaf6ea;
     --color-warning: #a15c00;
@@ -231,6 +232,38 @@ button:focus-visible {
 .sidebar__nav .nav-link.active svg {
     color: var(--color-accent);
 }
+
+/* Estilo del submenu de inventario e inventario-valorizado */
+.nav-group--active .nav-submenu {
+    display: block;
+}
+
+.nav-submenu {
+    display: none;
+    margin: 0 0 var(--spacing-1) 28px;
+    padding: 2px 0 2px 10px;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.nav-sublink {
+    display: block;
+    padding: 5px 8px;
+    color: var(--sidebar-text);
+    font-size: 0.82rem;
+    border-radius: var(--radius-sm);
+}
+
+.nav-sublink:hover,
+.nav-sublink.active {
+    color: var(--sidebar-text-active);
+    background: var(--sidebar-hover-bg);
+}
+
+.nav-sublink.active {
+    box-shadow: inset 2px 0 var(--color-accent);
+}
+
+/* Fin de sub menu inventario*/
 
 .content {
     grid-area: content;
