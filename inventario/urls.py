@@ -1,8 +1,16 @@
 from django.contrib.auth import views as auth_views
-from django.urls import path
-from django.urls import include
+from django.urls import include, path
 
+from inventario.forms import LoginForm
 from inventario.views import (
+    ConceptoGastoCreateView,
+    ConceptoGastoDeleteView,
+    ConceptoGastoListView,
+    ConceptoGastoUpdateView,
+    GastoCreateView,
+    GastoDeleteView,
+    GastoListView,
+    GastoUpdateView,
     catalogo_eliminar,
     catalogo_form,
     catalogo_lista,
@@ -12,11 +20,17 @@ from inventario.views import (
     gasto_comprobante_pdf,
     gastos_exportar_excel,
     gastos_exportar_pdf,
+    rol_crear,
+    rol_editar,
+    roles_lista,
+    usuario_crear,
+    usuario_editar,
+    usuarios_lista,
 )
 
 urlpatterns = [
     path('', dashboard, name='dashboard'),
-    path('inventario/', en_construccion, {'titulo': 'Inventario'}, name='inventario'),
+    path('inventario/', include('inventario.visualizaciones.urls')),
     path('gastos/', GastoListView.as_view(), name='gastos'),
     path('gastos/nuevo/', GastoCreateView.as_view(), name='gasto_crear'),
     path('gastos/<int:pk>/editar/', GastoUpdateView.as_view(), name='gasto_editar'),
