@@ -9,18 +9,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .forms import FormaPagoForm, RolForm, TipoDocumentoForm, UsuarioForm
-from .models import (
-    DetalleEntrada,
-    DetalleVenta,
-    FormaPago,
-    Gasto,
-    Producto,
-    Rol,
-    TipoDocumento,
-    Usuario,
-    Vehiculo,
-    Venta,
-)
+from .models import (DetalleEntrada,DetalleVenta,FormaPago,Gasto,
+    Producto,Rol,TipoDocumento,Usuario,Vehiculo,Venta,)
 from .permisos import permiso_requerido, tiene_permiso
 
 # Bajo este umbral (entradas - ventas) un producto se marca "bajo stock" en el
