@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Eliminar gasto · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Eliminar gasto</h1>
+</div>
+
+{% include "inventario/_gastos_subnav.html" %}
+
+<div class="form-card">
+    <p>
+        ¿Seguro que querés eliminar el gasto de
+        <strong>{{ object.concepto }}</strong> por <strong>${{ object.monto }}</strong>
+        del {{ object.fecha }}? Esta acción no se puede deshacer.
+    </p>
+
+    <form method="post" class="form-actions">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <a href="{% url 'gastos' %}" class="btn">Cancelar</a>
+    </form>
+</div>
+{% endblock %}

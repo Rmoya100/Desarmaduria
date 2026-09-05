@@ -19,6 +19,8 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
 
+from .services import convertir_a_webp
+
 
 # ---------------------------------------------------------------------------
 # Seguridad / usuarios
@@ -76,25 +78,7 @@ class RolPermiso(models.Model):
 
 
 class Usuario(AbstractUser):
-    """Usuario del sistema. Hereda de `AbstractUser`, asi que Django aporta el
-    hasheo de contrasenas, el login, las sesiones y el admin.
-
-    Los `db_column` conservan los nombres de columna del schema original:
-
-        idUsuario     -> id            (heredado, renombrado)
-        username      -> username      (heredado)
-        email         -> email         (heredado)
-        passwordHash  -> password      (heredado)  <- Django la hashea
-        activo        -> is_active     (heredado)
-        fechaCreacion -> date_joined   (heredado)
-        ultimoAcceso  -> last_login    (heredado)
-        nombreUsuario -> nombre_usuario (propio)
-        idRol         -> rol            (propio)
-
-    `first_name` / `last_name` se eliminan porque `nombre_usuario` los cubre.
-    A cambio, `AbstractUser` agrega `is_staff` e `is_superuser`, que el admin
-    de Django necesita para funcionar.
-    """
+  
 
     first_name = None
     last_name = None
@@ -430,12 +414,35 @@ class Gasto(models.Model):
         db_column="idConcepto",
         related_name="gastos",
     )
+    forma_pago = models.ForeignKey(
+        FormaPago,
+        on_delete=models.PROTECT,
+        db_column="idFormaPago",
+        related_name="gastos",
+    )
     fecha = models.DateField(db_column="fecha")
     monto = models.DecimalField(
         max_digits=10, decimal_places=2, db_column="monto"
     )
     observaciones = models.CharField(
         max_length=200, null=True, blank=True, db_column="observaciones"
+    )
+    tipo_documento = models.ForeignKey(
+        TipoDocumento,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        db_column="idTipoDocumento",
+        related_name="gastos",
+    )
+    numero_documento = models.CharField(
+        max_length=50, blank=True, db_column="numeroDocumento"
+    )
+    imagen = models.ImageField(
+        upload_to="gastos/comprobantes/%Y/%m/",
+        blank=True,
+        null=True,
+        db_column="imagen",
     )
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -452,3 +459,11 @@ class Gasto(models.Model):
 
     def __str__(self):
         return f"{self.concepto}: {self.monto} ({self.fecha})"
+
+    def save(self, *args, **kwargs):
+        # Se compara la extension en vez de un flag aparte: una vez
+        # convertida, el nombre siempre termina en .webp, asi que un save()
+        # posterior sin cambiar la imagen no la vuelve a procesar.
+        if self.imagen and not self.imagen.name.lower().endswith(".webp"):
+            self.imagen = convertir_a_webp(self.imagen)
+        super().save(*args, **kwargs)

@@ -119,8 +119,8 @@ class EntradaAdmin(admin.ModelAdmin):
 
 @admin.register(Gasto)
 class GastoAdmin(admin.ModelAdmin):
-    list_display = ("id_gasto", "concepto", "fecha", "monto", "usuario")
-    list_filter = ("fecha", "concepto")
+    list_display = ("id_gasto", "concepto", "forma_pago", "fecha", "monto", "usuario")
+    list_filter = ("fecha", "concepto", "forma_pago")
 
 
 admin.site.register(

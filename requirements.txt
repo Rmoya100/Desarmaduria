@@ -10,5 +10,7 @@ PyMySQL==1.2.0
 python-dotenv==1.2.3
 # Procesa imagenes (conversion a WebP, etc.). Se instala "Pillow", se importa "PIL".
 Pillow==12.3.0
-# Importacion local del catalogo de piezas desde archivos .xlsx.
+# Genera los PDF exportables (modulo Gastos).
+reportlab==5.0.1
+# Genera los Excel exportables (modulo Gastos).
 openpyxl==3.1.5

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}{% if object %}Editar concepto{% else %}Nuevo concepto{% endif %} · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{% if object %}Editar concepto{% else %}Nuevo concepto{% endif %}</h1>
+</div>
+
+{% include "inventario/_gastos_subnav.html" %}
+
+<div class="form-card">
+    <form method="post" class="form">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <p class="form-error">{{ field.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="{% url 'conceptos' %}" class="btn">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
