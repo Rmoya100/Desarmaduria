@@ -1,0 +1,16 @@
+# Dependencias directas del proyecto.
+# Instalar con:  pip install -r requirements.txt
+# Regenerar versiones con:  pip freeze
+
+Django==6.1
+djangorestframework==3.18.0
+# Driver de MySQL. PyMySQL se registra como "MySQLdb" en desarmaduria/__init__.py
+PyMySQL==1.2.0
+# Lee el archivo .env. Ojo: se instala "python-dotenv", se importa "dotenv".
+python-dotenv==1.2.3
+# Procesa imagenes (conversion a WebP, etc.). Se instala "Pillow", se importa "PIL".
+Pillow==12.3.0
+# Genera los PDF exportables (modulo Gastos).
+reportlab==5.0.1
+# Genera los Excel exportables (modulo Gastos).
+openpyxl==3.1.5

@@ -1,0 +1,108 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprobante de gasto #{{ gasto.pk }} · Desarmaduría</title>
+    <link rel="icon" href="{% static 'imagen/logo.webp' %}">
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+</head>
+<body class="comprobante-body">
+    <div class="comprobante">
+        <div class="comprobante__toolbar">
+            <a href="{% url 'gastos' %}" class="btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M15 18l-6-6 6-6"></path>
+                </svg>
+                <span>Volver</span>
+            </a>
+            <div class="comprobante__toolbar-actions">
+                <button type="button" class="btn" id="btnImprimir">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 9V3h12v6"></path>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <rect x="6" y="14" width="12" height="7"></rect>
+                    </svg>
+                    <span>Imprimir</span>
+                </button>
+                <a href="{% url 'gasto_comprobante_pdf' gasto.pk %}" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 3v12"></path>
+                        <path d="M7 10l5 5 5-5"></path>
+                        <path d="M5 21h14"></path>
+                    </svg>
+                    <span>Guardar PDF</span>
+                </a>
+            </div>
+        </div>
+
+        <article class="comprobante__sheet">
+            <header class="comprobante__brand">
+                <img src="{% static 'imagen/logo.webp' %}" alt="Logo Desarmaduría" class="comprobante__logo">
+                <div>
+                    <strong>Desarmaduría</strong>
+                    <span>Sistema de gestión de gastos</span>
+                </div>
+            </header>
+
+            <div class="comprobante__banner">
+                <div>
+                    <span class="comprobante__eyebrow">Control de gastos</span>
+                    <h1>Documento adjunto de gasto</h1>
+                </div>
+                <div class="comprobante__banner-meta">
+                    <span class="comprobante__badge">#{{ gasto.pk }}</span>
+                    <span>Generado el {% now "d-m-Y H:i" %} hrs</span>
+                </div>
+            </div>
+
+            <div class="comprobante__meta">
+                <div class="comprobante__meta-item">
+                    <span>Fecha</span>
+                    <strong>{{ gasto.fecha }}</strong>
+                </div>
+                <div class="comprobante__meta-item">
+                    <span>Concepto</span>
+                    <strong>{{ gasto.concepto }}</strong>
+                </div>
+                <div class="comprobante__meta-item">
+                    <span>Monto</span>
+                    <strong>${{ gasto.monto }}</strong>
+                </div>
+                <div class="comprobante__meta-item">
+                    <span>Tipo Doc.</span>
+                    <strong>{{ gasto.tipo_documento|default:"—" }}</strong>
+                </div>
+                <div class="comprobante__meta-item">
+                    <span>N.° Documento</span>
+                    <strong>{{ gasto.numero_documento|default:"—" }}</strong>
+                </div>
+            </div>
+
+            {% if gasto.observaciones %}
+            <p class="comprobante__observaciones"><strong>Observaciones:</strong> {{ gasto.observaciones }}</p>
+            {% endif %}
+
+            <div class="comprobante__image-wrap">
+                {% if gasto.imagen %}
+                <img src="{{ gasto.imagen.url }}" alt="Comprobante adjunto del gasto #{{ gasto.pk }}">
+                {% else %}
+                <div class="comprobante__placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                        <circle cx="9" cy="10" r="2"></circle>
+                        <path d="M21 16l-5.5-5.5L7 19"></path>
+                    </svg>
+                    <span>Este gasto no tiene una imagen adjunta.</span>
+                </div>
+                {% endif %}
+            </div>
+        </article>
+    </div>
+
+    <script>
+        document.getElementById("btnImprimir").addEventListener("click", () => window.print());
+    </script>
+</body>
+</html>

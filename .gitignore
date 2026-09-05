@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+build/
+dist/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+/staticfiles/
+/media/
+local_settings.py
+
+# Datos y documentación local de pruebas
+docs/
+VENTAS.xlsx
+
+# Tests locales: no compartir entre ramas (inventario/tests.py stub sí se versiona)
+inventario/tests_*.py
+
+# Variables de entorno / secretos
+.env
+.env.*
+!.env.example
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+#claude
+.claude/
+claude/
