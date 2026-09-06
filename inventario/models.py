@@ -1,19 +1,3 @@
-"""Modelos de la app `inventario`.
-
-Portados desde schema_desarmaduria.sql. Se conservan los nombres de tabla y
-de columna del esquema original mediante `Meta.db_table` y `db_column`, de modo
-que `makemigrations` + `migrate` generan exactamente esas tablas en MySQL.
-
-Notas de portabilidad:
-- Los PK `... UNSIGNED AUTO_INCREMENT` se mapean a `AutoField` (INT). Django no
-  distingue MEDIUMINT/SMALLINT; el rango efectivo es mayor, sin impacto funcional.
-- `TINYINT(1)` -> `BooleanField`.
-- `YEAR` -> `PositiveSmallIntegerField` (Django no tiene campo YEAR nativo).
-- `DATETIME DEFAULT CURRENT_TIMESTAMP` -> `auto_now_add=True`.
-- `rolPermiso` tenia PK compuesta (idRol, idPermiso); Django <5.2 no soporta PK
-  compuesta, se usa PK surrogado `id` + restriccion UNIQUE sobre ambas FKs.
-"""
-
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -185,6 +169,9 @@ class Categoria(models.Model):
 
 class Producto(models.Model):
     id_producto = models.AutoField(primary_key=True, db_column="idProducto")
+    codigo = models.CharField(
+        max_length=50, unique=True, null=True, blank=True, db_column="codigo"
+    )
     categoria = models.ForeignKey(
         Categoria,
         on_delete=models.PROTECT,
@@ -202,6 +189,13 @@ class Producto(models.Model):
     nombre = models.CharField(max_length=100, db_column="nombre")
     costo = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True, db_column="costo"
+    )
+    precio_venta = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        db_column="precioVenta",
     )
     fecha_eliminacion = models.DateTimeField(
         null=True, blank=True, db_column="fechaEliminacion"
@@ -222,6 +216,13 @@ class Producto(models.Model):
         self.fecha_eliminacion = timezone.now()
         self.eliminado_por = usuario
         self.save(update_fields=["fecha_eliminacion", "eliminado_por"])
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # El codigo depende del pk, asi que se completa tras el primer INSERT.
+        if not self.codigo:
+            self.codigo = f"PRD-{self.pk:06d}"
+            super().save(update_fields=["codigo"])
 
     def __str__(self):
         return self.nombre
@@ -461,9 +462,6 @@ class Gasto(models.Model):
         return f"{self.concepto}: {self.monto} ({self.fecha})"
 
     def save(self, *args, **kwargs):
-        # Se compara la extension en vez de un flag aparte: una vez
-        # convertida, el nombre siempre termina en .webp, asi que un save()
-        # posterior sin cambiar la imagen no la vuelve a procesar.
         if self.imagen and not self.imagen.name.lower().endswith(".webp"):
             self.imagen = convertir_a_webp(self.imagen)
         super().save(*args, **kwargs)

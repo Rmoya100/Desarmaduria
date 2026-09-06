@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
+{% block title %}Edición masiva · Inventario{% endblock %}
+
+{% block content %}
+<div class="inventory-page-head">
+    <div>
+        <p class="eyebrow">Catálogo de piezas</p>
+        <h1>Edición masiva de productos</h1>
+    </div>
+    <a href="{% url 'productos_lista' %}" class="btn">Volver a productos</a>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+
+    {% for error in form.non_field_errors %}
+    <p class="alert alert-error">{{ error }}</p>
+    {% endfor %}
+
+    <section class="carga-card">
+        <h2>1 · Filtrar productos</h2>
+        <div class="bulk-changes">
+            <div class="filter-field">{{ form.filtro_categoria.label_tag }}{{ form.filtro_categoria }}</div>
+            <div class="filter-field">{{ form.filtro_marca.label_tag }}{{ form.filtro_marca }}</div>
+            <div class="filter-field">{{ form.filtro_modelo.label_tag }}{{ form.filtro_modelo }}</div>
+            <div class="filter-field">{{ form.filtro_vehiculo.label_tag }}{{ form.filtro_vehiculo }}</div>
+        </div>
+        <button type="submit" name="accion" value="filtrar" class="btn">Filtrar</button>
+    </section>
+
+    <section class="carga-card" style="margin-top:18px;">
+        <h2>2 · Cambios a aplicar</h2>
+        <div class="bulk-changes">
+            <div class="filter-field">{{ form.nueva_categoria.label_tag }}{{ form.nueva_categoria }}</div>
+            <div class="filter-field">{{ form.nuevo_vehiculo.label_tag }}{{ form.nuevo_vehiculo }}</div>
+            <div class="filter-field">
+                <label>{{ form.quitar_vehiculo }} {{ form.quitar_vehiculo.label }}</label>
+            </div>
+            <div class="filter-field">{{ form.nuevo_costo.label_tag }}{{ form.nuevo_costo }}</div>
+            <div class="filter-field">
+                {{ form.ajuste_costo_pct.label_tag }}{{ form.ajuste_costo_pct }}
+                <small class="inventory-muted">{{ form.ajuste_costo_pct.help_text }}</small>
+            </div>
+            <div class="filter-field">{{ form.nuevo_precio_venta.label_tag }}{{ form.nuevo_precio_venta }}</div>
+            <div class="filter-field">{{ form.ajuste_precio_pct.label_tag }}{{ form.ajuste_precio_pct }}</div>
+            <div class="filter-field">
+                <label>{{ form.aplicar_a_todos }} {{ form.aplicar_a_todos.label }}</label>
+            </div>
+        </div>
+        <button type="submit" name="accion" value="aplicar" class="btn btn-primary">Aplicar cambios</button>
+    </section>
+
+    <section class="table-panel" style="margin-top:18px;">
+        <div class="table-panel__header">
+            <div>
+                <h2>Productos alcanzados</h2>
+                <p class="table-count">{{ productos|length }} producto(s)</p>
+            </div>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th class="bulk-select-cell"><input type="checkbox" data-check-all></th>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th>Categoría</th>
+                        <th>Vehículo</th>
+                        <th>Costo</th>
+                        <th>Precio venta</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for producto in productos %}
+                <tr>
+                    <td class="bulk-select-cell"><input type="checkbox" name="seleccion" value="{{ producto.pk }}"></td>
+                    <td>{{ producto.codigo|default:'—' }}</td>
+                    <td><strong>{{ producto.nombre }}</strong></td>
+                    <td>{{ producto.categoria.nombre_categoria }}</td>
+                    <td>{% if producto.vehiculo %}{{ producto.vehiculo }}{% else %}<span class="inventory-muted">Sin vehículo</span>{% endif %}</td>
+                    <td>${{ producto.costo|default:0|floatformat:0 }}</td>
+                    <td>{% if producto.precio_venta is not None %}${{ producto.precio_venta|floatformat:0 }}{% else %}<span class="inventory-muted">—</span>{% endif %}</td>
+                </tr>
+                {% empty %}<tr><td colspan="7" class="empty-state">No hay productos que coincidan con el filtro.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('[data-check-all]').forEach(function (maestro) {
+    maestro.addEventListener('change', function () {
+        document.querySelectorAll('input[name="seleccion"]').forEach(function (cb) {
+            cb.checked = maestro.checked;
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
+{% block title %}Importar productos · Inventario{% endblock %}
+
+{% block content %}
+<div class="inventory-page-head">
+    <div>
+        <p class="eyebrow">Catálogo de piezas</p>
+        <h1>Importar productos por Excel</h1>
+    </div>
+    <a href="{% url 'productos_lista' %}" class="btn">Volver a productos</a>
+</div>
+
+<div class="carga-grid">
+    <div class="carga-card">
+        <h2>1 · Descarga la plantilla</h2>
+        <p class="table-count">
+            El archivo trae todos los productos actuales y las hojas
+            <strong>Categorías</strong> y <strong>Vehículos</strong> con los IDs válidos.
+        </p>
+        <a href="{% url 'productos_exportar_excel' %}" class="btn btn-primary">Descargar productos actuales (.xlsx)</a>
+
+        <h2 style="margin-top:22px;">2 · Sube el archivo editado</h2>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {% for campo in form %}
+            <p>
+                {{ campo.label_tag }}<br>
+                {{ campo }}
+                {% if campo.help_text %}<br><small class="inventory-muted">{{ campo.help_text }}</small>{% endif %}
+                {% for error in campo.errors %}<br><span class="alert alert-error">{{ error }}</span>{% endfor %}
+            </p>
+            {% endfor %}
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Importar productos</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="carga-card">
+        <h2>Formato de la hoja «Productos»</h2>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>Columna</th><th>¿Requerida?</th><th>Detalle</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>codigo</strong></td><td>No</td><td>Vacío = producto nuevo (se genera <code>PRD-000123</code>). Con valor = se actualiza ese producto.</td></tr>
+                    <tr><td><strong>nombre</strong></td><td>Sí (nuevos)</td><td>Nombre de la pieza.</td></tr>
+                    <tr><td><strong>categoria</strong></td><td>Sí (nuevos)</td><td>Nombre exacto. Si no existe, se crea.</td></tr>
+                    <tr><td><strong>vehiculo_id</strong></td><td>No</td><td>ID de la hoja «Vehículos». Vacío = sin vehículo.</td></tr>
+                    <tr><td><strong>costo</strong></td><td>No</td><td>Al actualizar, celda vacía = no se cambia.</td></tr>
+                    <tr><td><strong>precio_venta</strong></td><td>No</td><td>Al actualizar, celda vacía = no se cambia.</td></tr>
+                    <tr><td><strong>stock_actual</strong></td><td>No</td><td>Si sube, se crea una Entrada de ajuste por la diferencia.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <ul>
+            <li>Las columnas <code>vehiculo_desc</code> e <code>id_producto</code> son solo de referencia; se ignoran.</li>
+            <li>Bajar el stock desde el Excel no está permitido: hazlo con una venta. La fila queda como aviso.</li>
+            <li>Si una fila falla con un error inesperado, no se guarda nada (todo o nada).</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

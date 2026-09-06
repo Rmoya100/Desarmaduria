@@ -69,7 +69,14 @@
 
     var tbody = form.querySelector("tbody");
     var countEl = document.querySelector(".table-count");
-    var COLS = { nombre: 0, categoria: 1, vehiculo: 2, costo: 3 };
+    var encabezados = form.querySelectorAll("thead th");
+    var COLS = { nombre: 1, categoria: 2, vehiculo: 3, costo: 4 };
+    Array.prototype.forEach.call(encabezados, function (th, indice) {
+        var nombre = th.getAttribute("data-col");
+        if (nombre) COLS[nombre] = indice;
+    });
+    var TOTAL_COLUMNAS = encabezados.length || 7;
+
     var inputs = {
         nombre: form.querySelector('input[name="nombre"]'),
         categoria: form.querySelector('input[name="categoria"]'),
@@ -115,10 +122,24 @@
         if (!filaVacia) {
             filaVacia = document.createElement("tr");
             filaVacia.innerHTML =
-                '<td colspan="5" class="empty-state">Ningún producto coincide con la búsqueda.</td>';
+                '<td colspan="' + TOTAL_COLUMNAS + '" class="empty-state">Ningún producto coincide con la búsqueda.</td>';
             tbody.appendChild(filaVacia);
         }
         filaVacia.hidden = false;
+    }
+
+    var exportLink = document.querySelector("[data-export-url]");
+
+    function actualizarExport() {
+        if (!exportLink) return;
+        var base = exportLink.getAttribute("data-export-url");
+        var params = new URLSearchParams();
+        Object.keys(inputs).forEach(function (clave) {
+            var valor = inputs[clave] ? inputs[clave].value.trim() : "";
+            if (valor) params.set(clave, valor);
+        });
+        var query = params.toString();
+        exportLink.href = query ? base + "?" + query : base;
     }
 
     function aplicarFiltro() {
@@ -141,6 +162,7 @@
                 visibles + (visibles === 1 ? " producto encontrado" : " productos encontrados");
         }
         actualizarVacia(visibles);
+        actualizarExport();
     }
 
     var ordenActual = { campo: "nombre", dir: 1 };

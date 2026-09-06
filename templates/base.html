@@ -58,10 +58,11 @@
                         <span>Dashboard</span>
                     </a>
                 </li>
-                <li class="nav-group{% if request.resolver_match.url_name == 'inventario_visualizacion' or request.resolver_match.url_name == 'inventario_valorizado' or request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_crear' or request.resolver_match.url_name == 'producto_editar' %} nav-group--active{% endif %}">
+                {% with seccion_inventario='inventario_visualizacion inventario_valorizado' %}
+                <li class="nav-group{% if request.resolver_match.url_name in seccion_inventario.split %} nav-group--active{% endif %}">
                     <a
                         href="{% url 'inventario_visualizacion' %}"
-                        class="nav-link nav-link--parent{% if request.resolver_match.url_name == 'inventario_visualizacion' or request.resolver_match.url_name == 'inventario_valorizado' or request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_crear' or request.resolver_match.url_name == 'producto_editar' %} active{% endif %}"
+                        class="nav-link nav-link--parent{% if request.resolver_match.url_name in seccion_inventario.split %} active{% endif %}"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M21 8l-9-5-9 5 9 5 9-5z"></path>
@@ -73,9 +74,28 @@
                     <ul class="nav-submenu">
                         <li><a href="{% url 'inventario_visualizacion' %}" class="nav-sublink{% if request.resolver_match.url_name == 'inventario_visualizacion' %} active{% endif %}">Existencias</a></li>
                         <li><a href="{% url 'inventario_valorizado' %}" class="nav-sublink{% if request.resolver_match.url_name == 'inventario_valorizado' %} active{% endif %}">Inventario valorizado</a></li>
-                        <li><a href="{% url 'productos_lista' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_editar' %} active{% endif %}">Productos</a></li>
                     </ul>
                 </li>
+                {% endwith %}
+                {% with seccion_productos='productos_lista producto_crear producto_editar productos_importar productos_edicion_masiva' %}
+                <li class="nav-group{% if request.resolver_match.url_name in seccion_productos.split %} nav-group--active{% endif %}">
+                    <a
+                        href="{% url 'productos_lista' %}"
+                        class="nav-link nav-link--parent{% if request.resolver_match.url_name in seccion_productos.split %} active{% endif %}"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3.5 10.5 10.5 3.5h7l3 3v7l-7 7-10-10z"></path>
+                            <circle cx="8" cy="8" r="1.4"></circle>
+                        </svg>
+                        <span>Productos</span>
+                    </a>
+                    <ul class="nav-submenu">
+                        <li><a href="{% url 'productos_lista' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_crear' or request.resolver_match.url_name == 'producto_editar' %} active{% endif %}">Listado</a></li>
+                        <li><a href="{% url 'productos_edicion_masiva' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_edicion_masiva' %} active{% endif %}">Edición masiva</a></li>
+                        <li><a href="{% url 'productos_importar' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_importar' %} active{% endif %}">Importar / Exportar</a></li>
+                    </ul>
+                </li>
+                {% endwith %}
                 <li>
                     <a
                         href="{% url 'gastos' %}"
