@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Venta registrada · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Venta registrada</h1>
+</div>
+
+<div class="form-card">
+    <p>La venta se registró correctamente.</p>
+    <p>¿Deseas registrar otra venta?</p>
+
+    <div class="form-actions">
+        <a href="{% url 'venta_crear' %}" class="btn btn-primary">Sí, nueva venta</a>
+        <a href="{% url 'ventas' %}" class="btn">No, volver a Ventas</a>
+    </div>
+</div>
+{% endblock %}

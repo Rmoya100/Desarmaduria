@@ -76,6 +76,21 @@
                         <li><a href="{% url 'productos_lista' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_editar' %} active{% endif %}">Productos</a></li>
                     </ul>
                 </li>
+                {% if request.user|tiene_permiso:"ventas:ver" %}
+                <li>
+                    <a
+                        href="{% url 'ventas' %}"
+                        class="nav-link{% if request.resolver_match.url_name == 'ventas' or request.resolver_match.url_name == 'venta_crear' or request.resolver_match.url_name == 'venta_editar' %} active{% endif %}"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="9" cy="21" r="1"></circle>
+                            <circle cx="19" cy="21" r="1"></circle>
+                            <path d="M2.5 3h2l2.6 12.4a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L21 8H6"></path>
+                        </svg>
+                        <span>Ventas</span>
+                    </a>
+                </li>
+                {% endif %}
                 <li>
                     <a
                         href="{% url 'gastos' %}"

@@ -49,15 +49,14 @@ def _restar_meses(fecha, meses):
 # ---------------------------------------------------------------------------
 # Reporte 1: Ventas por periodo
 # ---------------------------------------------------------------------------
-def reporte_ventas(desde, hasta):
-    detalles = DetalleVenta.objects.filter(
-        venta__fecha_venta__gte=desde, venta__fecha_venta__lte=hasta
-    )
+def ventas_anotadas():
+    """Queryset base de Venta con `total_venta` (suma de cantidad*precio de
+    sus detalles) ya anotado, sin filtro de fecha. Lo reutilizan tanto este
+    reporte como el listado del modulo Ventas, para que ambos calculen el
+    total de la misma forma."""
     total_expr = Sum(F("cantidad") * F("precio"), output_field=MONTO)
-
-    ventas = (
-        Venta.objects.filter(fecha_venta__gte=desde, fecha_venta__lte=hasta)
-        .select_related("tipo_documento", "forma_pago", "usuario")
+    return (
+        Venta.objects.select_related("tipo_documento", "forma_pago", "usuario")
         .annotate(
             total_venta=Coalesce(
                 Subquery(
@@ -70,6 +69,17 @@ def reporte_ventas(desde, hasta):
             )
         )
         .order_by("-fecha_venta", "-id_venta")
+    )
+
+
+def reporte_ventas(desde, hasta):
+    detalles = DetalleVenta.objects.filter(
+        venta__fecha_venta__gte=desde, venta__fecha_venta__lte=hasta
+    )
+    total_expr = Sum(F("cantidad") * F("precio"), output_field=MONTO)
+
+    ventas = ventas_anotadas().filter(
+        fecha_venta__gte=desde, fecha_venta__lte=hasta
     )
 
     total_general = detalles.aggregate(total=total_expr)["total"] or Decimal("0")

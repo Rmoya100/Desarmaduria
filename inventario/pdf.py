@@ -2,6 +2,7 @@
 vistas solo se ocupen de "que datos exportar" y este archivo de "como se ve
 el PDF" (colores, fuentes, layout de la tabla)."""
 
+from decimal import Decimal
 from io import BytesIO
 
 from django.contrib.staticfiles import finders
@@ -507,6 +508,122 @@ def gasto_comprobante_pdf_bytes(gasto):
             _encabezado("Documento adjunto de gasto", generado_en),
             Spacer(1, 16),
             *contenido,
+        ]
+    )
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def venta_comprobante_pdf_bytes(venta):
+    """PDF de una pagina para UNA venta: sus datos generales y el detalle de
+    productos vendidos, con el total. Lo pide el boton "Guardar PDF" de la
+    vista de comprobante individual de Ventas."""
+    estilos = getSampleStyleSheet()
+    estilo_etiqueta = ParagraphStyle(
+        "EtiquetaVenta",
+        parent=estilos["Normal"],
+        fontSize=7.5,
+        fontName="Helvetica-Bold",
+        textColor=colors.white,
+    )
+    estilo_valor = ParagraphStyle(
+        "ValorVenta",
+        parent=estilos["Normal"],
+        fontSize=10.5,
+        fontName="Helvetica-Bold",
+    )
+
+    etiquetas = ["FECHA", "TIPO DOC.", "FORMA DE PAGO", "USUARIO"]
+    valores = [
+        venta.fecha_venta.strftime("%d-%m-%Y"),
+        str(venta.tipo_documento),
+        str(venta.forma_pago),
+        str(venta.usuario),
+    ]
+    ancho_columna = ANCHO_PAGINA_COMPROBANTE / len(etiquetas)
+
+    tabla_datos = Table(
+        [
+            [Paragraph(etq, estilo_etiqueta) for etq in etiquetas],
+            [Paragraph(val, estilo_valor) for val in valores],
+        ],
+        colWidths=[ancho_columna] * len(etiquetas),
+    )
+    tabla_datos.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("BACKGROUND", (0, 1), (-1, 1), colors.white),
+                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+
+    encabezados_detalle = ["Producto", "Cantidad", "Precio", "Subtotal"]
+    filas_detalle = [encabezados_detalle]
+    total = Decimal("0")
+    for detalle in venta.detalles.select_related("producto").all():
+        subtotal = detalle.cantidad * detalle.precio
+        total += subtotal
+        filas_detalle.append(
+            [
+                str(detalle.producto),
+                str(detalle.cantidad),
+                formato_monto(detalle.precio),
+                formato_monto(subtotal),
+            ]
+        )
+    filas_detalle.append(["", "", "Total", formato_monto(total)])
+
+    proporciones_detalle = [0.46, 0.16, 0.19, 0.19]
+    anchos_detalle = [ANCHO_PAGINA_COMPROBANTE * p for p in proporciones_detalle]
+    tabla_detalle = Table(filas_detalle, colWidths=anchos_detalle, repeatRows=1)
+    tabla_detalle.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title=f"Comprobante de venta #{venta.pk}",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+        bottomMargin=1.8 * cm,
+    )
+    doc.build(
+        [
+            _encabezado("Documento de venta", generado_en),
+            Spacer(1, 16),
+            Paragraph(
+                f"Comprobante de venta #{venta.pk}",
+                ParagraphStyle("TituloVenta", parent=estilos["Heading2"], textColor=COLOR_PRIMARIO_OSCURO),
+            ),
+            Spacer(1, 8),
+            tabla_datos,
+            Spacer(1, 16),
+            tabla_detalle,
         ]
     )
     buffer.seek(0)
