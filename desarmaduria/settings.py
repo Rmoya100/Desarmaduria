@@ -135,9 +135,19 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'es-cl'
 
+# El locale "es" base de Django separa miles con un espacio fino (\xa0), no
+# con punto. desarmaduria/formats/es_CL/formats.py lo pisa con el separador
+# que se usa realmente en Chile.
+FORMAT_MODULE_PATH = ['desarmaduria.formats']
+
 TIME_ZONE = 'America/Santiago'
 
 USE_I18N = True
+
+# Sin esto, los numeros en los templates ({{ gasto.monto }}) muestran la coma
+# decimal del locale es-cl pero NO separador de miles (ej. "5000,00" en vez de
+# "5.000,00"). Django lo trae apagado por default.
+USE_THOUSAND_SEPARATOR = True
 
 USE_TZ = True
 
@@ -147,6 +157,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Archivos subidos por usuarios (ej. foto del comprobante de un gasto).
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field

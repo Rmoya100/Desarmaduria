@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
+
+{% block title %}Inventario valorizado · Desarmaduría{% endblock %}
+
+{% block content %}
+
+<div class="metric-grid">
+    {% for metrica in metricas %}<article class="metric-card"><span>{{ metrica.titulo }}</span><strong>{{ metrica.valor }}</strong><small>{{ metrica.detalle }}</small></article>{% endfor %}
+</div>
+
+<form method="get" class="inventory-toolbar">
+    <div class="inventory-toolbar__fields">
+        <div class="filter-field"><label for="id_categoria">Categoría</label>{{ form.categoria }}</div>
+        <div class="filter-field"><label for="id_marca">Marca</label>{{ form.marca }}</div>
+        <div class="filter-field"><label for="id_modelo">Modelo</label>{{ form.modelo }}</div>
+        <div class="filter-field"><label for="id_estado">Estado</label>{{ form.estado }}</div>
+    </div>
+    <div class="inventory-toolbar__actions">
+        <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+        <a href="{% url 'inventario_valorizado' %}" class="btn">Limpiar</a>
+    </div>
+</form>
+
+<section class="table-panel">
+    <div class="table-panel__header">
+        <div>
+            <p class="eyebrow">Valorización por pieza</p>
+        </div>
+        <span>{{ productos|length }} productos</span>
+    </div>
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead><tr><th>Producto</th><th>Categoría</th><th>Automóvil</th><th>Disponible</th><th>Costo unitario</th><th>Valor en stock</th></tr></thead>
+            <tbody>
+            {% for producto in productos %}
+            <tr>
+                <td><strong>{{ producto.nombre }}</strong></td>
+                <td>{{ producto.categoria.nombre_categoria }}</td>
+                <td>{% if producto.vehiculo %}{{ producto.vehiculo.modelo.marca.nombre_marca }} {{ producto.vehiculo.modelo.nombre_modelo }} · {{ producto.vehiculo.anio }}{% else %}<span class="inventory-muted">Sin vehículo informado</span>{% endif %}</td>
+                <td><span class="stock-badge{% if producto.stock_disponible <= 0 %} stock-badge--empty{% endif %}">{{ producto.stock_disponible }}</span></td>
+                <td>${{ producto.costo|default:0|floatformat:0 }}</td>
+                <td class="value-cell">${{ producto.valor_stock|floatformat:0 }}</td>
+            </tr>
+            {% empty %}<tr><td colspan="6" class="empty-state">No hay productos que coincidan con los filtros.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

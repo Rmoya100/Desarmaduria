@@ -91,8 +91,15 @@ class VehiculoAdmin(admin.ModelAdmin):
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "categoria", "vehiculo", "costo")
-    list_filter = ("categoria",)
+    list_display = (
+        "nombre",
+        "categoria",
+        "vehiculo",
+        "costo",
+        "fecha_eliminacion",
+        "eliminado_por",
+    )
+    list_filter = ("categoria", "fecha_eliminacion")
     search_fields = ("nombre",)
 
 
@@ -112,8 +119,8 @@ class EntradaAdmin(admin.ModelAdmin):
 
 @admin.register(Gasto)
 class GastoAdmin(admin.ModelAdmin):
-    list_display = ("id_gasto", "concepto", "fecha", "monto", "usuario")
-    list_filter = ("fecha", "concepto")
+    list_display = ("id_gasto", "concepto", "forma_pago", "fecha", "monto", "usuario")
+    list_filter = ("fecha", "concepto", "forma_pago")
 
 
 admin.site.register(
