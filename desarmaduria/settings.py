@@ -53,6 +53,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Debe ir justo despues de SecurityMiddleware y antes que todo lo demas:
+    # sirve los archivos de STATIC_ROOT sin pasar por el resto del stack.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -157,6 +160,30 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Carpeta destino de `collectstatic`. No se versiona (ver .gitignore): se
+# regenera en cada despliegue. Es la que WhiteNoise sirve en produccion.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Los estaticos se versionan siempre, para que el navegador jamas sirva una
+# version vieja desde su cache:
+#   - Produccion: hash del contenido en el nombre (base.4f2a1c9d.css), lo que
+#     ademas permite cachear cada archivo un anio.
+#   - Desarrollo: `?v=<mtime>` en la URL. No se puede usar el hash porque su
+#     manifiesto solo existe despues de `collectstatic`, y {% static %}
+#     fallaria sin el.
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': (
+            'desarmaduria.almacenamiento.StaticFilesVersionados'
+            if DEBUG
+            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        ),
+    },
+}
 
 # Archivos subidos por usuarios (ej. foto del comprobante de un gasto).
 MEDIA_URL = 'media/'

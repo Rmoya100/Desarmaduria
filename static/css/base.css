@@ -241,12 +241,31 @@ button:focus-visible {
 }
 
 /* Estilo del submenu de inventario e inventario-valorizado */
-.nav-group--active .nav-submenu {
-    display: block;
+
+/* El <summary> es el control que despliega el submenu. Se le quita el
+   triangulo que los navegadores dibujan por defecto, porque el chevron
+   propio cumple esa funcion y encaja con el resto del sidebar. */
+.sidebar__nav .nav-link--parent {
+    cursor: pointer;
+    list-style: none;
+}
+
+.sidebar__nav .nav-link--parent::-webkit-details-marker {
+    display: none;
+}
+
+.sidebar__nav .nav-link svg.nav-link__chevron {
+    width: 14px;
+    height: 14px;
+    margin-left: auto;
+    transition: transform 0.15s ease;
+}
+
+.nav-group[open] .nav-link__chevron {
+    transform: rotate(180deg);
 }
 
 .nav-submenu {
-    display: none;
     margin: 0 0 var(--spacing-1) 28px;
     padding: 2px 0 2px 10px;
     border-left: 1px solid rgba(255, 255, 255, 0.2);
@@ -1506,4 +1525,13 @@ tfoot td {
 .chart-panel__canvas-wrap {
     position: relative;
     height: 260px;
+}
+
+/* ---------------------------------------------------------------------
+   Preferencia de movimiento reducido
+--------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .sidebar__nav .nav-link svg.nav-link__chevron {
+        transition: none;
+    }
 }

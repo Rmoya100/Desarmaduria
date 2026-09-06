@@ -263,3 +263,53 @@ class VentaCicloCompletoTests(TestCase):
     def test_exportar_excel(self):
         response = self.client.get(reverse("ventas_exportar_excel"))
         self.assertEqual(response.status_code, 200)
+
+
+class SidebarSubmenuTests(TestCase):
+    """El submenu de Inventario es un <details>, no un estado del servidor.
+
+    Antes su visibilidad dependia de la clase `nav-group--active`, que Django
+    aplicaba segun la URL actual: pulsar el padre navegaba a Inventario y el
+    submenu quedaba abierto sin forma de cerrarlo. Estas pruebas fijan la
+    estructura que permite alternarlo.
+    """
+
+    def setUp(self):
+        self.usuario = crear_usuario("sidebar")
+        self.usuario.is_superuser = True
+        self.usuario.save()
+        self.client.force_login(self.usuario)
+
+    def _details(self, respuesta):
+        html = respuesta.content.decode()
+        inicio = html.index('<details class="nav-group"')
+        return html[inicio:html.index(">", inicio) + 1]
+
+    def test_el_grupo_es_un_details_desplegable(self):
+        respuesta = self.client.get(reverse("dashboard"))
+        html = respuesta.content.decode()
+        self.assertIn('<details class="nav-group"', html)
+        self.assertIn("<summary", html)
+        # La clase antigua ya no debe decidir la visibilidad del submenu.
+        self.assertNotIn("nav-group--active", html)
+        self.assertEqual(html.count('class="nav-sublink'), 3)
+        # Debe existir un unico <details>: si un comentario `{# #}` quedara
+        # abierto, su texto se emitiria literal y el `<details>` que menciona
+        # se parsearia como etiqueta real, dejando el menu dentro de un
+        # desplegable cerrado e invisible.
+        self.assertEqual(html.count("<details"), 1)
+
+    def test_las_plantillas_no_emiten_comentarios_literales(self):
+        """`{# ... #}` solo comenta una linea. Si se abre y no se cierra en la
+        misma, Django lo trata como texto y lo escribe en el HTML."""
+        for nombre in ["dashboard", "ventas", "gastos", "reportes"]:
+            with self.subTest(vista=nombre):
+                html = self.client.get(reverse(nombre)).content.decode()
+                self.assertNotIn("{#", html)
+                self.assertNotIn("{%", html)
+
+    def test_abierto_solo_dentro_de_inventario(self):
+        fuera = self._details(self.client.get(reverse("dashboard")))
+        dentro = self._details(self.client.get(reverse("inventario_visualizacion")))
+        self.assertNotIn("open", fuera)
+        self.assertIn("open", dentro)
