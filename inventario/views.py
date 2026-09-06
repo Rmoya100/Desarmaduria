@@ -23,11 +23,9 @@ from .forms import (
 )
 from .models import (
     ConceptoGasto,
-    DetalleEntrada,
     DetalleVenta,
     FormaPago,
     Gasto,
-    Producto,
     Rol,
     TipoDocumento,
     Usuario,
@@ -36,6 +34,8 @@ from .models import (
 )
 from .pdf import gasto_comprobante_pdf_bytes, gastos_pdf_bytes
 from .permisos import permiso_requerido, tiene_permiso
+from .reportes.queries import reporte_utilidad, restar_meses
+from .servicios.inventario import productos_con_stock, valor_inventario
 
 # Bajo este umbral (entradas - ventas) un producto se marca "bajo stock" en el
 # dashboard. No existe un campo de stock minimo en el schema original, asi
@@ -66,35 +66,24 @@ def dashboard(request):
     )["total"] or Decimal("0")
     total_gastos_mes = gastos_mes.aggregate(total=Sum("monto"))["total"] or Decimal("0")
 
-    # Sumas por separado (no un .annotate() combinado): sumar dos relaciones
-    # inversas distintas (entradas y ventas) en la misma anotacion duplica
-    # filas por el cruce de joins y da totales inflados.
-    entradas_por_producto = dict(
-        DetalleEntrada.objects.values("producto_id")
-        .annotate(total=Sum("cantidad"))
-        .values_list("producto_id", "total")
-    )
-    ventas_por_producto = dict(
-        DetalleVenta.objects.values("producto_id")
-        .annotate(total=Sum("cantidad"))
-        .values_list("producto_id", "total")
-    )
-    productos_bajo_stock = sorted(
-        (
-            {"producto": producto, "stock": entradas_por_producto.get(producto.pk, 0) - ventas_por_producto.get(producto.pk, 0)}
-            for producto in Producto.objects.select_related("categoria")
-        ),
-        key=lambda item: item["stock"],
-    )
-    productos_bajo_stock = [
-        item for item in productos_bajo_stock if item["stock"] <= UMBRAL_BAJO_STOCK
-    ][:8]
+    # Misma fuente de verdad que el modulo Inventario (servicios/inventario.py):
+    # los 3 KPIs de stock y el valor de inventario salen de la misma anotacion.
+    productos = list(productos_con_stock())
+    productos_stock_bajo = [
+        p for p in productos if 0 < p.stock_disponible <= UMBRAL_BAJO_STOCK
+    ]
+    productos_sin_stock = [p for p in productos if p.stock_disponible <= 0]
 
-    top_productos = (
+    top_productos = list(
         DetalleVenta.objects.values("producto__nombre")
         .annotate(cantidad_total=Sum("cantidad"))
         .order_by("-cantidad_total")[:5]
     )
+
+    # Evolucion de ventas vs gastos de los ultimos 6 meses (mismo calculo que
+    # el reporte de Utilidad, para que ambas vistas nunca queden desalineadas).
+    desde_evolucion = restar_meses(inicio_mes, 5)
+    evolucion = reporte_utilidad(desde_evolucion.isoformat(), hoy.isoformat())
 
     contexto = {
         "total_ventas_mes": total_ventas_mes,
@@ -102,10 +91,13 @@ def dashboard(request):
         "total_gastos_mes": total_gastos_mes,
         "cantidad_gastos_mes": gastos_mes.count(),
         "utilidad_mes": total_ventas_mes - total_gastos_mes,
-        "total_productos": Producto.objects.count(),
+        "productos_activos": len(productos),
+        "cantidad_stock_bajo": len(productos_stock_bajo),
+        "cantidad_sin_stock": len(productos_sin_stock),
+        "valor_inventario": valor_inventario(productos),
         "total_vehiculos": Vehiculo.objects.count(),
         "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
-        "productos_bajo_stock": productos_bajo_stock,
+        "productos_stock_bajo": productos_stock_bajo[:8],
         "top_productos": top_productos,
         "ventas_recientes": Venta.objects.select_related(
             "tipo_documento", "forma_pago", "usuario"
@@ -113,6 +105,15 @@ def dashboard(request):
         "gastos_recientes": Gasto.objects.select_related("concepto", "usuario").order_by(
             "-fecha", "-id_gasto"
         )[:5],
+        "grafico_evolucion": {
+            "etiquetas": [fila["mes"].strftime("%b %Y") for fila in evolucion["filas"]],
+            "ventas": [float(fila["ventas"]) for fila in evolucion["filas"]],
+            "gastos": [float(fila["gastos"]) for fila in evolucion["filas"]],
+        },
+        "grafico_top_productos": {
+            "etiquetas": [fila["producto__nombre"] for fila in top_productos],
+            "cantidades": [fila["cantidad_total"] for fila in top_productos],
+        },
     }
     return render(request, "inventario/dashboard.html", contexto)
 

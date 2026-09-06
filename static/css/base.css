@@ -23,6 +23,13 @@
     --color-info: #2f6690;
     --color-info-bg: #e8f1f7;
 
+    /* Colores de graficos (Chart.js, dashboard). --color-primary tiene poco
+       croma a proposito (paleta "neutra"), pero eso lo hace leer gris en un
+       grafico; esta variante mas saturada del mismo azul pasa el piso de
+       croma del validador de paleta sin desentonar con el resto del sitio. */
+    --chart-ventas: #1d6fa5;
+    --chart-gastos: #c62828;
+
     /* Naranja del logo. SOLO sobre fondos oscuros (sidebar): sobre blanco
        da 2.26:1 de contraste y no pasa WCAG AA. */
     --color-accent: #fe912f;
@@ -1110,4 +1117,151 @@ tfoot td {
 .login-card__submit {
     width: 100%;
     justify-content: center;
+}
+
+/* ---------------------------------------------------------------------
+   8. Dashboard v2: tarjetas KPI con icono, paneles de alerta, graficos
+--------------------------------------------------------------------- */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--spacing-3);
+    margin-bottom: var(--spacing-4);
+}
+
+.kpi-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: var(--spacing-3);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+}
+
+.kpi-card__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+}
+
+.kpi-card__icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.kpi-card__icon--primario { background: var(--color-info-bg);    color: var(--color-primary); }
+.kpi-card__icon--exito    { background: var(--color-success-bg); color: var(--color-success); }
+.kpi-card__icon--alerta   { background: var(--color-warning-bg); color: var(--color-warning); }
+.kpi-card__icon--peligro  { background: var(--color-danger-bg);  color: var(--color-danger); }
+
+.kpi-card__label {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    font-weight: 600;
+}
+
+.kpi-card__value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.kpi-card__meta {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.kpi-card__value--exito   { color: var(--color-success); }
+.kpi-card__value--alerta  { color: var(--color-warning); }
+.kpi-card__value--peligro { color: var(--color-danger); }
+
+/* Panel con franja de color en el header (alertas de stock) */
+.panel-alert {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.panel-alert__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    color: #fff;
+    font-weight: 600;
+}
+
+.panel-alert__header svg {
+    width: 18px;
+    height: 18px;
+    vertical-align: -4px;
+    margin-right: 4px;
+}
+
+.panel-alert__header a {
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    white-space: nowrap;
+}
+
+.panel-alert__header--peligro { background: var(--color-danger); }
+.panel-alert__header--alerta  { background: var(--color-warning); }
+
+.panel-alert__body {
+    padding: var(--spacing-3);
+}
+
+.panel-alert__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-4) var(--spacing-2);
+    color: var(--color-success);
+    text-align: center;
+}
+
+.panel-alert__empty svg {
+    width: 40px;
+    height: 40px;
+}
+
+/* Paneles de graficos (Chart.js) */
+.chart-panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: var(--spacing-3) var(--spacing-4) var(--spacing-4);
+}
+
+.chart-panel h2 {
+    font-size: 1rem;
+    margin-bottom: 2px;
+}
+
+.chart-panel__subtitulo {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-bottom: var(--spacing-3);
+}
+
+.chart-panel__canvas-wrap {
+    position: relative;
+    height: 260px;
 }
