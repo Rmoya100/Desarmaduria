@@ -29,7 +29,7 @@ def rango_desde_hasta(request, dias_por_defecto=None, meses_por_defecto=None):
     defecto del reporte que llama (mes actual, o los ultimos N meses)."""
     hoy = timezone.localdate()
     if meses_por_defecto is not None:
-        default_desde = _restar_meses(hoy.replace(day=1), meses_por_defecto - 1)
+        default_desde = restar_meses(hoy.replace(day=1), meses_por_defecto - 1)
     elif dias_por_defecto is not None:
         default_desde = hoy - timedelta(days=dias_por_defecto)
     else:
@@ -39,7 +39,7 @@ def rango_desde_hasta(request, dias_por_defecto=None, meses_por_defecto=None):
     return desde, hasta
 
 
-def _restar_meses(fecha, meses):
+def restar_meses(fecha, meses):
     total = fecha.month - 1 - meses
     anio = fecha.year + total // 12
     mes = total % 12 + 1
