@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Rotación de productos · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header page-header--actions">
+    <h1>Rotación de productos</h1>
+    <div class="page-header__actions">
+        <a href="{% url 'reporte_rotacion_pdf' %}?desde={{ desde }}&hasta={{ hasta }}" class="btn btn-pdf">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                <path d="M14 3v5h5"></path>
+                <path d="M9.5 17v-4.5h1.2a1.4 1.4 0 0 1 0 2.8H9.5M13.3 17v-4.5h1.6a1.5 1.5 0 0 1 1.5 1.5v1.5a1.5 1.5 0 0 1-1.5 1.5h-1.6z"></path>
+            </svg>
+            <span>PDF</span>
+        </a>
+        <a href="{% url 'reporte_rotacion_excel' %}?desde={{ desde }}&hasta={{ hasta }}" class="btn btn-excel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                <path d="M14 3v5h5"></path>
+                <path d="M9 12.5l5.5 5M14.5 12.5l-5.5 5"></path>
+            </svg>
+            <span>Excel</span>
+        </a>
+    </div>
+</div>
+
+{% include "inventario/reportes/_subnav.html" %}
+
+<form method="get" class="filter-bar">
+    <div class="form-group">
+        <label for="id_desde">Desde</label>
+        <input type="date" id="id_desde" name="desde" value="{{ desde }}" class="form-control">
+    </div>
+    <div class="form-group">
+        <label for="id_hasta">Hasta</label>
+        <input type="date" id="id_hasta" name="hasta" value="{{ hasta }}" class="form-control">
+    </div>
+    <div class="form-group filter-bar__actions">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <a href="{% url 'reporte_rotacion' %}" class="btn">Limpiar</a>
+    </div>
+</form>
+
+<div class="dashboard-grid">
+    <section class="panel">
+        <h2>Más vendidos</h2>
+        {% if mas_vendidos %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>Cantidad vendida</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for producto in mas_vendidos %}
+                <tr>
+                    <td>{{ producto.nombre }}</td>
+                    <td>{{ producto.categoria }}</td>
+                    <td>{{ producto.cantidad_vendida }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">Sin productos registrados.</div>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <h2>Menos vendidos</h2>
+        {% if menos_vendidos %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>Cantidad vendida</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for producto in menos_vendidos %}
+                <tr>
+                    <td>{{ producto.nombre }}</td>
+                    <td>{{ producto.categoria }}</td>
+                    <td>
+                        <span class="badge {% if producto.cantidad_vendida <= 0 %}badge-danger{% else %}badge-warning{% endif %}">
+                            {{ producto.cantidad_vendida }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">Sin productos registrados.</div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

@@ -106,9 +106,9 @@ DATABASES = {
 # IMPORTANTE: cambiar este valor DESPUES de la primera migracion es muy costoso.
 AUTH_USER_MODEL = 'inventario.Usuario'
 
-# TODO: apuntar a una vista de login propia cuando exista el modulo "Usuarios".
-# Mientras tanto, LoginRequiredMixin redirige aca (misma sesion que el resto del sitio).
-LOGIN_URL = 'admin:login'
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'dashboard'
+LOGOUT_REDIRECT_URL = 'login'
 
 
 # Password validation
@@ -135,8 +135,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'es-cl'
 
-# Formato numerico propio (separador de miles con punto), ver
-# desarmaduria/formats/es_CL/formats.py
+# El locale "es" base de Django separa miles con un espacio fino (\xa0), no
+# con punto. desarmaduria/formats/es_CL/formats.py lo pisa con el separador
+# que se usa realmente en Chile.
 FORMAT_MODULE_PATH = ['desarmaduria.formats']
 
 TIME_ZONE = 'America/Santiago'
@@ -148,16 +149,7 @@ USE_I18N = True
 # "5.000,00"). Django lo trae apagado por default.
 USE_THOUSAND_SEPARATOR = True
 
-# El locale "es" base de Django separa miles con un espacio fino (\xa0), no
-# con punto. desarmaduria/formats/es_CL/formats.py lo pisa con el separador
-# que se usa realmente en Chile.
-FORMAT_MODULE_PATH = "desarmaduria.formats"
-
 USE_TZ = True
-
-# Separador de miles en numeros de plantillas (ej. $125.000), segun el
-# formato numerico de es-cl.
-USE_THOUSAND_SEPARATOR = True
 
 
 # Static files (CSS, JavaScript, Images)

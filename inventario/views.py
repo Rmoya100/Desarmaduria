@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import DecimalField, ExpressionWrapper, F, ProtectedError, Sum
 from django.http import HttpResponse
@@ -298,7 +299,7 @@ def gastos_filtrados(request):
     return queryset
 
 
-class GastoListView(ListView):
+class GastoListView(LoginRequiredMixin, ListView):
     model = Gasto
     context_object_name = "gastos"
 
@@ -313,6 +314,7 @@ class GastoListView(ListView):
         return context
 
 
+@login_required
 def gastos_exportar_pdf(request):
     gastos = gastos_filtrados(request)
     total = gastos.aggregate(total=Sum("monto"))["total"] or 0
@@ -322,6 +324,7 @@ def gastos_exportar_pdf(request):
     return response
 
 
+@login_required
 def gastos_exportar_excel(request):
     gastos = gastos_filtrados(request)
     total = gastos.aggregate(total=Sum("monto"))["total"] or 0
@@ -375,7 +378,7 @@ def gastos_exportar_excel(request):
     return response
 
 
-class GastoFormMixin:
+class GastoFormMixin(LoginRequiredMixin):
     model = Gasto
     form_class = GastoForm
     template_name = "inventario/gasto_form.html"
@@ -395,7 +398,7 @@ class GastoUpdateView(GastoFormMixin, UpdateView):
         return super().form_valid(form)
 
 
-class GastoDeleteView(DeleteView):
+class GastoDeleteView(LoginRequiredMixin, DeleteView):
     model = Gasto
     success_url = reverse_lazy("gastos")
 
@@ -404,6 +407,7 @@ class GastoDeleteView(DeleteView):
         return super().form_valid(form)
 
 
+@login_required
 def gasto_comprobante(request, pk):
     gasto = get_object_or_404(
         Gasto.objects.select_related("concepto", "forma_pago", "usuario", "tipo_documento"), pk=pk
@@ -411,6 +415,7 @@ def gasto_comprobante(request, pk):
     return render(request, "inventario/gasto_comprobante.html", {"gasto": gasto})
 
 
+@login_required
 def gasto_comprobante_pdf(request, pk):
     gasto = get_object_or_404(
         Gasto.objects.select_related("concepto", "forma_pago", "usuario", "tipo_documento"), pk=pk
@@ -425,14 +430,14 @@ def gasto_comprobante_pdf(request, pk):
 # ---------------------------------------------------------------------------
 # Conceptos de gasto
 # ---------------------------------------------------------------------------
-class ConceptoGastoListView(ListView):
+class ConceptoGastoListView(LoginRequiredMixin, ListView):
     model = ConceptoGasto
     ordering = "nombre_gasto"
     context_object_name = "conceptos"
     template_name = "inventario/concepto_list.html"
 
 
-class ConceptoGastoFormMixin:
+class ConceptoGastoFormMixin(LoginRequiredMixin):
     model = ConceptoGasto
     form_class = ConceptoGastoForm
     template_name = "inventario/concepto_form.html"
@@ -451,7 +456,7 @@ class ConceptoGastoUpdateView(ConceptoGastoFormMixin, UpdateView):
         return super().form_valid(form)
 
 
-class ConceptoGastoDeleteView(DeleteView):
+class ConceptoGastoDeleteView(LoginRequiredMixin, DeleteView):
     model = ConceptoGasto
     template_name = "inventario/concepto_confirm_delete.html"
     success_url = reverse_lazy("conceptos")
