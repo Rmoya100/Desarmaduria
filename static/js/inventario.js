@@ -268,27 +268,25 @@
             return el ? String(el.value).trim() : "";
         };
 
-        var filaConDatos = function (tr) {
-            return Boolean(
-                valorFila(tr, "cantidad") ||
-                valorFila(tr, "costo") ||
-                valorFila(tr, "precio_venta")
-            );
+        var cantidadFila = function (tr) {
+            var v = parseInt(valorFila(tr, "cantidad"), 10);
+            return isNaN(v) ? 0 : v;
         };
 
-        // Una fila se ve si: su categoria esta marcada, O ya tiene datos
-        // cargados (asi lo completado no desaparece al cambiar de categoria).
+        // Se navega de a una categoria: marcar una desmarca las demas. Una
+        // fila se ve si es de la categoria activa O si ya tiene una cantidad
+        // cargada (asi lo que estas agregando no se pierde al cambiar de
+        // categoria, y lo que quedo en cero se oculta para ver mejor).
         var refrescarIngreso = function () {
-            var elegidas = {};
+            var activa = null;
             Array.prototype.forEach.call(ingresoChecks, function (cb) {
-                if (cb.checked) elegidas[cb.value] = true;
+                if (cb.checked) activa = cb.value;
             });
-            var hayFiltro = Object.keys(elegidas).length > 0;
             var visibles = 0;
             ingresoFilas.forEach(function (tr) {
                 var mostrar =
-                    Boolean(elegidas[tr.getAttribute("data-categoria")]) ||
-                    filaConDatos(tr);
+                    tr.getAttribute("data-categoria") === activa ||
+                    cantidadFila(tr) > 0;
                 tr.hidden = !mostrar;
                 if (mostrar) visibles += 1;
             });
@@ -296,8 +294,8 @@
                 ingresoVacio.hidden = visibles > 0;
                 var celda = ingresoVacio.querySelector("td");
                 if (celda) {
-                    celda.textContent = hayFiltro
-                        ? "Ninguna de las categorías marcadas tiene productos."
+                    celda.textContent = activa
+                        ? "Esta categoría no tiene productos."
                         : "Marca una categoría arriba para ver sus productos.";
                 }
             }
@@ -308,12 +306,21 @@
         };
 
         Array.prototype.forEach.call(ingresoChecks, function (cb) {
-            cb.addEventListener("change", refrescarIngreso);
+            cb.addEventListener("change", function () {
+                if (cb.checked) {
+                    Array.prototype.forEach.call(ingresoChecks, function (otro) {
+                        if (otro !== cb) otro.checked = false;
+                    });
+                }
+                refrescarIngreso();
+            });
         });
-        // Al escribir en una fila queda "fijada": aunque despues desmarques su
-        // categoria, sigue a la vista.
+        // Al cambiar la cantidad de una fila se recalcula: si la pones en
+        // cero y no es la categoria activa, se oculta al toque.
         ingresoForm.addEventListener("input", function (event) {
-            if (event.target.closest("[data-ingreso-tabla]")) refrescarIngreso();
+            if (event.target.name && event.target.name.slice(-9) === "-cantidad") {
+                refrescarIngreso();
+            }
         });
         refrescarIngreso();
 
@@ -354,21 +361,14 @@
             }
 
             ingresoFilas.forEach(function (tr) {
-                var nombreEl = tr.querySelector("strong");
-                var nombre = nombreEl ? nombreEl.textContent.trim() : "producto";
-                var cantidad = valorFila(tr, "cantidad");
-
-                if (!filaConDatos(tr)) {
+                // Solo se ingresan las filas con cantidad; el resto se
+                // deshabilita para que el POST no lleve miles de campos.
+                if (cantidadFila(tr) > 0) {
+                    conCantidad += 1;
+                } else {
                     Array.prototype.forEach.call(tr.querySelectorAll("input"), function (inp) {
                         inp.disabled = true;
                     });
-                    return;
-                }
-
-                if (!cantidad || parseInt(cantidad, 10) < 1) {
-                    problemas.push(nombre + " (falta la cantidad)");
-                } else {
-                    conCantidad += 1;
                 }
             });
 
