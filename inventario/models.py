@@ -140,6 +140,10 @@ class Vehiculo(models.Model):
         related_name="vehiculos",
     )
     anio = models.PositiveSmallIntegerField(db_column="anio")
+    tipo = models.CharField(
+        max_length=50, blank=True, db_column="tipo",
+        help_text="Tipo de vehiculo (texto libre): automovil, camioneta, SUV, etc.",
+    )
     patente = models.CharField(
         max_length=10, null=True, blank=True, unique=True, db_column="patente"
     )

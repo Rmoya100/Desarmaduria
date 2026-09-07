@@ -320,9 +320,9 @@ class SidebarSubmenuTests(TestCase):
 
 
 class IngresoTests(TestCase):
-    """Pantalla de ingresos: marca categorias, informa cantidad por producto
-    y de paso corrige costo, precio de venta y vehiculo (creando marca /
-    modelo / vehiculo si no existen). Permiso de negocio 'ingresos'."""
+    """Asistente de ingresos: paso 1 fecha + vehiculo, paso 2 piezas por
+    categoria (cantidad / costo / precio), paso 3 guarda UNA entrada con
+    todo y asigna ese vehiculo a las piezas. Permiso de negocio 'ingresos'."""
 
     def setUp(self):
         self.rol_admin = Rol.objects.get(nombre_rol="Administrador")
@@ -334,14 +334,21 @@ class IngresoTests(TestCase):
         )
         self.prefix = IngresoFormSet().prefix
 
-    def _post(self, lineas):
-        return self.client.post(
-            reverse("ingresos"), datos_formset(self.prefix, lineas)
-        )
+    def _post(self, lineas, **cabecera):
+        data = {
+            "fecha": "2026-02-01",
+            "marca": "Nissan",
+            "modelo": "V16",
+            "anio": "2018",
+            "tipo": "Automóvil",
+        }
+        data.update(cabecera)
+        data.update(datos_formset(self.prefix, lineas))
+        return self.client.post(reverse("ingreso_crear"), data)
 
     def test_anonimo_redirige_a_login(self):
         self.client.logout()
-        response = self.client.get(reverse("ingresos"))
+        response = self.client.get(reverse("ingreso_crear"))
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("login"), response.url)
 
@@ -351,69 +358,56 @@ class IngresoTests(TestCase):
         )
         self.client.force_login(sin_permiso)
         self.assertEqual(self.client.get(reverse("ingresos")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("ingreso_crear")).status_code, 403)
 
     def test_get_muestra_las_categorias(self):
-        html = self.client.get(reverse("ingresos")).content.decode()
+        html = self.client.get(reverse("ingreso_crear")).content.decode()
         self.assertIn("Motor", html)
         self.assertIn("data-ingreso-tabla", html)
-        # El filtro de categorias depende de que se cargue inventario.js.
         self.assertIn("js/inventario.js", html)
 
-    def test_registra_entrada_y_actualiza_precio(self):
+    def test_registra_una_entrada_con_todo(self):
+        otro = Producto.objects.create(
+            categoria=self.categoria, nombre="Radiador", costo=Decimal("1")
+        )
         response = self._post(
             [
-                {
-                    "producto": self.producto.pk,
-                    "cantidad": "5",
-                    "costo": "1200",
-                    "precio_venta": "1900",
-                }
+                {"producto": self.producto.pk, "cantidad": "5",
+                 "costo": "1200", "precio_venta": "1900"},
+                {"producto": otro.pk, "cantidad": "2"},
             ]
         )
         self.assertRedirects(response, reverse("ingresos"))
         self.assertEqual(Entrada.objects.count(), 1)
-        self.assertEqual(Entrada.objects.get().fecha, timezone.localdate())
-        detalle = DetalleEntrada.objects.get()
-        self.assertEqual(detalle.producto, self.producto)
-        self.assertEqual(detalle.cantidad, 5)
+        entrada = Entrada.objects.get()
+        self.assertEqual(str(entrada.fecha), "2026-02-01")
+        self.assertEqual(entrada.usuario, self.usuario)
+        self.assertEqual(entrada.detalles.count(), 2)
         self.producto.refresh_from_db()
         self.assertEqual(self.producto.costo, Decimal("1200"))
         self.assertEqual(self.producto.precio_venta, Decimal("1900"))
 
-    def test_crea_vehiculo_desde_marca_modelo_anio(self):
+    def test_crea_el_vehiculo_de_la_cabecera_y_lo_asigna_a_las_piezas(self):
         self._post(
-            [
-                {
-                    "producto": self.producto.pk,
-                    "cantidad": "1",
-                    "marca": "Toyota",
-                    "modelo": "Hilux",
-                    "anio": "2015",
-                }
-            ]
+            [{"producto": self.producto.pk, "cantidad": "1"}],
+            marca="Toyota", modelo="Hilux", anio="2015", tipo="Camioneta",
         )
+        entrada = Entrada.objects.get()
+        self.assertIsNotNone(entrada.vehiculo)
+        self.assertEqual(entrada.vehiculo.modelo.nombre_modelo, "Hilux")
+        self.assertEqual(entrada.vehiculo.modelo.marca.nombre_marca, "Toyota")
+        self.assertEqual(entrada.vehiculo.anio, 2015)
+        self.assertEqual(entrada.vehiculo.tipo, "Camioneta")
         self.producto.refresh_from_db()
-        self.assertIsNotNone(self.producto.vehiculo)
-        self.assertEqual(self.producto.vehiculo.anio, 2015)
-        self.assertEqual(self.producto.vehiculo.modelo.nombre_modelo, "Hilux")
-        self.assertEqual(self.producto.vehiculo.modelo.marca.nombre_marca, "Toyota")
-        self.assertEqual(Marca.objects.filter(nombre_marca="Toyota").count(), 1)
-        self.assertEqual(Vehiculo.objects.count(), 1)
+        self.assertEqual(self.producto.vehiculo, entrada.vehiculo)
 
     def test_reutiliza_vehiculo_existente(self):
         marca = Marca.objects.create(nombre_marca="Toyota")
         modelo = Modelo.objects.create(marca=marca, nombre_modelo="Hilux")
         Vehiculo.objects.create(modelo=modelo, anio=2015)
         self._post(
-            [
-                {
-                    "producto": self.producto.pk,
-                    "cantidad": "1",
-                    "marca": "Toyota",
-                    "modelo": "Hilux",
-                    "anio": "2015",
-                }
-            ]
+            [{"producto": self.producto.pk, "cantidad": "1"}],
+            marca="Toyota", modelo="Hilux", anio="2015",
         )
         self.assertEqual(Vehiculo.objects.count(), 1)
         self.assertEqual(Modelo.objects.count(), 1)
@@ -439,6 +433,10 @@ class IngresoTests(TestCase):
             categoria=self.categoria, nombre="Radiador", costo=Decimal("1")
         )
         data = {
+            "fecha": "2026-02-01",
+            "marca": "Nissan",
+            "modelo": "V16",
+            "anio": "2018",
             f"{self.prefix}-TOTAL_FORMS": "2",
             f"{self.prefix}-INITIAL_FORMS": "0",
             f"{self.prefix}-MIN_NUM_FORMS": "0",
@@ -446,11 +444,11 @@ class IngresoTests(TestCase):
             f"{self.prefix}-0-producto": self.producto.pk,
             f"{self.prefix}-0-cantidad": "4",
         }
-        response = self.client.post(reverse("ingresos"), data)
+        response = self.client.post(reverse("ingreso_crear"), data)
         self.assertRedirects(response, reverse("ingresos"))
         self.assertEqual(DetalleEntrada.objects.count(), 1)
 
-    def test_datos_de_producto_sin_cantidad_es_error(self):
+    def test_costo_sin_cantidad_es_error(self):
         response = self._post(
             [{"producto": self.producto.pk, "cantidad": "", "costo": "1500"}]
         )
@@ -459,33 +457,18 @@ class IngresoTests(TestCase):
         self.producto.refresh_from_db()
         self.assertEqual(self.producto.costo, Decimal("1000"))
 
-    def test_vehiculo_incompleto_es_error(self):
+    def test_cabecera_sin_vehiculo_es_error(self):
         response = self._post(
-            [
-                {
-                    "producto": self.producto.pk,
-                    "cantidad": "2",
-                    "marca": "Toyota",
-                    "modelo": "",
-                    "anio": "",
-                }
-            ]
+            [{"producto": self.producto.pk, "cantidad": "2"}], marca="", modelo="", anio=""
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Entrada.objects.count(), 0)
 
-    def test_entrada_anota_el_vehiculo_si_todas_las_piezas_son_del_mismo(self):
-        otro = Producto.objects.create(
-            categoria=self.categoria, nombre="Radiador", costo=Decimal("1")
-        )
-        self._post(
-            [
-                {"producto": self.producto.pk, "cantidad": "1",
-                 "marca": "Nissan", "modelo": "V16", "anio": "2018"},
-                {"producto": otro.pk, "cantidad": "2",
-                 "marca": "Nissan", "modelo": "V16", "anio": "2018"},
-            ]
-        )
-        entrada = Entrada.objects.get()
-        self.assertIsNotNone(entrada.vehiculo)
-        self.assertEqual(entrada.vehiculo.modelo.nombre_modelo, "V16")
+    def test_lista_muestra_el_ingreso_con_su_detalle(self):
+        self._post([{"producto": self.producto.pk, "cantidad": "3"}])
+        html = self.client.get(reverse("ingresos")).content.decode()
+        self.assertIn("Nissan", html)
+        self.assertIn("V16", html)
+        self.assertIn("bodeguero", html)          # responsable
+        self.assertIn("Alternador", html)         # detalle de piezas
+        self.assertIn("febrero de 2026", html)    # fecha (formato es-cl)

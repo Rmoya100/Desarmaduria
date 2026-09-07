@@ -9,13 +9,39 @@ from ..models import Producto
 ANIO_MAX = date.today().year + 1
 
 
+class IngresoCabeceraForm(forms.Form):
+    """Paso 1: fecha del ingreso y vehiculo del que se desarma. El vehiculo se
+    guarda en Entrada.vehiculo y se asigna a todas las piezas del ingreso."""
+
+    fecha = forms.DateField(
+        label="Fecha del ingreso",
+        widget=forms.DateInput(attrs={"type": "date", "class": "input-control"}),
+    )
+    marca = forms.CharField(
+        label="Marca", max_length=50,
+        widget=forms.TextInput(attrs={"class": "input-control", "placeholder": "Marca"}),
+    )
+    modelo = forms.CharField(
+        label="Modelo", max_length=50,
+        widget=forms.TextInput(attrs={"class": "input-control", "placeholder": "Modelo"}),
+    )
+    anio = forms.IntegerField(
+        label="Año", min_value=1900, max_value=ANIO_MAX,
+        widget=forms.NumberInput(attrs={"class": "input-control", "placeholder": "Año"}),
+    )
+    tipo = forms.CharField(
+        label="Tipo de vehículo", required=False, max_length=50,
+        widget=forms.TextInput(
+            attrs={"class": "input-control", "placeholder": "Automóvil, camioneta, SUV…"}
+        ),
+    )
+
+
 class IngresoLineaForm(forms.Form):
-    """Una fila de la pantalla de ingresos: un producto ya existente al que se
-    le informa la cantidad recibida y, opcionalmente, se le corrige costo,
-    precio de venta y vehiculo de origen (marca + modelo + año, que se crean
-    en sus tablas si no existen). El vehiculo se llena por fila porque de un
-    mismo auto salen piezas de varias categorias y el ingreso se guarda por
-    categoria."""
+    """Una fila de la tabla del paso 2: un producto ya existente al que se le
+    informa la cantidad recibida y, opcionalmente, se le corrige costo y
+    precio de venta. El vehiculo viene del paso 1 (es el mismo para todo el
+    ingreso)."""
 
     producto = forms.ModelChoiceField(
         queryset=Producto.objects.all(), widget=forms.HiddenInput()
@@ -45,35 +71,12 @@ class IngresoLineaForm(forms.Form):
             attrs={"class": "input-control", "min": "0", "step": "0.01"}
         ),
     )
-    marca = forms.CharField(
-        required=False,
-        max_length=50,
-        widget=forms.TextInput(
-            attrs={"class": "input-control", "placeholder": "Marca"}
-        ),
-    )
-    modelo = forms.CharField(
-        required=False,
-        max_length=50,
-        widget=forms.TextInput(
-            attrs={"class": "input-control", "placeholder": "Modelo"}
-        ),
-    )
-    anio = forms.IntegerField(
-        required=False,
-        min_value=1900,
-        max_value=ANIO_MAX,
-        widget=forms.NumberInput(
-            attrs={"class": "input-control", "placeholder": "Año"}
-        ),
-    )
 
-    CAMPOS_VEHICULO = ("marca", "modelo", "anio")
-    CAMPOS_PRODUCTO = ("costo", "precio_venta", "marca", "modelo", "anio")
-    # Estos campos se muestran vacios con el valor actual como placeholder: asi
-    # una fila que el usuario no toco queda realmente vacia (no se envia) y
-    # dejar el campo en blanco significa "no cambiar".
-    CAMPOS_VALOR_ACTUAL = ("costo", "precio_venta", "marca", "modelo", "anio")
+    CAMPOS_PRODUCTO = ("costo", "precio_venta")
+    # Se muestran vacios con el valor actual como placeholder: asi una fila que
+    # el usuario no toco queda realmente vacia (no se envia) y dejar el campo
+    # en blanco significa "no cambiar".
+    CAMPOS_VALOR_ACTUAL = ("costo", "precio_venta")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -84,17 +87,6 @@ class IngresoLineaForm(forms.Form):
 
     def clean(self):
         datos = super().clean()
-
-        informados = [
-            datos.get(campo) not in (None, "") for campo in self.CAMPOS_VEHICULO
-        ]
-        if any(informados) and not all(informados):
-            raise forms.ValidationError(
-                "Para asignar un vehículo completa marca, modelo y año."
-            )
-
-        # Costo/precio/vehiculo se guardan sobre el Producto al registrar el
-        # ingreso; sin cantidad no hay ingreso, asi que esos datos se ignorarian.
         hay_datos_producto = any(
             datos.get(campo) not in (None, "") for campo in self.CAMPOS_PRODUCTO
         )

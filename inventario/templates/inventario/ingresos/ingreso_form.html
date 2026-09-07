@@ -2,13 +2,14 @@
 {% load static %}
 
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
-{% block title %}Ingresos · Inventario{% endblock %}
+{% block title %}Nuevo ingreso · Inventario{% endblock %}
 
 {% block content %}
 <div class="inventory-page-head">
     <div>
         <h1>Registrar ingreso de productos</h1>
     </div>
+    <a href="{% url 'ingresos' %}" class="btn">Ver ingresos</a>
 </div>
 
 <form method="post" data-ingreso-form>
@@ -17,13 +18,39 @@
 
     <p class="alert alert-error" data-ingreso-aviso style="display:none"></p>
 
-    {% if formset.non_form_errors %}
     {% for error in formset.non_form_errors %}<p class="alert alert-error">{{ error }}</p>{% endfor %}
-    {% endif %}
+    {% for error in cabecera.non_field_errors %}<p class="alert alert-error">{{ error }}</p>{% endfor %}
 
     <section class="carga-card">
-        <h2>1 · Elegir categorías</h2>
-        <p class="inventory-muted">Marca una o más categorías para ver sus productos.</p>
+        <h2>1 · Fecha y vehículo</h2>
+        <p class="inventory-muted">El vehículo del que se desarma. Se guarda en el ingreso y se asigna a todas las piezas cargadas.</p>
+        <div class="bulk-changes">
+            <div class="filter-field">
+                {{ cabecera.fecha.label_tag }}{{ cabecera.fecha }}
+                {% for e in cabecera.fecha.errors %}<small class="errorlist">{{ e }}</small>{% endfor %}
+            </div>
+            <div class="filter-field">
+                {{ cabecera.marca.label_tag }}{{ cabecera.marca }}
+                {% for e in cabecera.marca.errors %}<small class="errorlist">{{ e }}</small>{% endfor %}
+            </div>
+            <div class="filter-field">
+                {{ cabecera.modelo.label_tag }}{{ cabecera.modelo }}
+                {% for e in cabecera.modelo.errors %}<small class="errorlist">{{ e }}</small>{% endfor %}
+            </div>
+            <div class="filter-field">
+                {{ cabecera.anio.label_tag }}{{ cabecera.anio }}
+                {% for e in cabecera.anio.errors %}<small class="errorlist">{{ e }}</small>{% endfor %}
+            </div>
+            <div class="filter-field">
+                {{ cabecera.tipo.label_tag }}{{ cabecera.tipo }}
+                {% for e in cabecera.tipo.errors %}<small class="errorlist">{{ e }}</small>{% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section class="carga-card" style="margin-top:18px;">
+        <h2>2 · Cargar piezas por categoría</h2>
+        <p class="inventory-muted">Marca una categoría, completa cantidad / costo / precio de las piezas que recibiste y pasa a la siguiente. Las filas que completaste quedan a la vista aunque cambies de categoría.</p>
         <div class="categoria-checks" data-ingreso-categorias>
             {% for categoria in categorias %}
             <label class="categoria-check">
@@ -39,9 +66,8 @@
     <section class="table-panel" style="margin-top:18px;">
         <div class="table-panel__header">
             <div>
-                <h2>2 · Productos y datos del ingreso</h2>
+                <h2>3 · Revisar y guardar</h2>
                 <p class="table-count" data-ingreso-contador>0 productos visibles</p>
-                <p class="inventory-muted">Marca, modelo y año son el vehículo del que salió la pieza. Deja en blanco lo que no cambie; solo se ingresan las filas con cantidad.</p>
             </div>
             <button type="submit" class="btn btn-primary">Guardar ingreso</button>
         </div>
@@ -54,9 +80,6 @@
                         <th>Cantidad recibida</th>
                         <th>Costo</th>
                         <th>Precio venta</th>
-                        <th>Marca</th>
-                        <th>Modelo</th>
-                        <th>Año</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -66,20 +89,16 @@
                         {{ form.producto }}
                         <strong>{{ producto.nombre }}</strong>
                         {% if producto.codigo %}<br><small class="inventory-muted">{{ producto.codigo }}</small>{% endif %}
-                        {% if producto.vehiculo %}<br><small class="inventory-muted">Vehículo actual: {{ producto.vehiculo }}</small>{% endif %}
                         {% for error in form.non_field_errors %}<br><small class="errorlist">{{ error }}</small>{% endfor %}
                     </td>
                     <td>{{ producto.categoria.nombre_categoria }}</td>
                     <td>{{ form.cantidad }}{% for e in form.cantidad.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
                     <td>{{ form.costo }}{% for e in form.costo.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
                     <td>{{ form.precio_venta }}{% for e in form.precio_venta.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
-                    <td>{{ form.marca }}{% for e in form.marca.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
-                    <td>{{ form.modelo }}{% for e in form.modelo.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
-                    <td>{{ form.anio }}{% for e in form.anio.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
                 </tr>
                 {% endfor %}
                 <tr data-ingreso-vacio>
-                    <td colspan="8" class="empty-state">Marca una categoría arriba para ver sus productos.</td>
+                    <td colspan="5" class="empty-state">Marca una categoría arriba para ver sus productos.</td>
                 </tr>
                 </tbody>
             </table>

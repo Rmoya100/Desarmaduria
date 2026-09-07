@@ -303,3 +303,32 @@
 
 [data-ingreso-tabla] td .input-control { min-width: 84px; }
 [data-ingreso-tabla] td { vertical-align: top; }
+
+/* Lista de ingresos: una tarjeta desplegable por entrada */
+.ingreso-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 10px;
+}
+
+.ingreso-card > summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 0.9rem;
+}
+
+.ingreso-card > summary::-webkit-details-marker { display: none; }
+.ingreso-card__fecha { font-weight: 600; }
+.ingreso-card__vehiculo { font-weight: 600; }
+.ingreso-card__meta { color: var(--color-text-muted); font-size: 0.82rem; }
+.ingreso-card > summary .nav-link__chevron { margin-left: auto; width: 18px; height: 18px; transition: transform .15s; }
+.ingreso-card[open] > summary .nav-link__chevron { transform: rotate(180deg); }
+.ingreso-card__body { padding: 0 16px 14px; }
+.ingreso-card__body .data-table { margin-top: 4px; }

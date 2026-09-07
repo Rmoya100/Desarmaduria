@@ -261,7 +261,23 @@
         );
         var ingresoVacio = ingresoForm.querySelector("[data-ingreso-vacio]");
         var ingresoContador = ingresoForm.querySelector("[data-ingreso-contador]");
+        var ingresoAviso = ingresoForm.querySelector("[data-ingreso-aviso]");
 
+        var valorFila = function (tr, sufijo) {
+            var el = tr.querySelector('[name$="-' + sufijo + '"]');
+            return el ? String(el.value).trim() : "";
+        };
+
+        var filaConDatos = function (tr) {
+            return Boolean(
+                valorFila(tr, "cantidad") ||
+                valorFila(tr, "costo") ||
+                valorFila(tr, "precio_venta")
+            );
+        };
+
+        // Una fila se ve si: su categoria esta marcada, O ya tiene datos
+        // cargados (asi lo completado no desaparece al cambiar de categoria).
         var refrescarIngreso = function () {
             var elegidas = {};
             Array.prototype.forEach.call(ingresoChecks, function (cb) {
@@ -270,7 +286,9 @@
             var hayFiltro = Object.keys(elegidas).length > 0;
             var visibles = 0;
             ingresoFilas.forEach(function (tr) {
-                var mostrar = hayFiltro && elegidas[tr.getAttribute("data-categoria")];
+                var mostrar =
+                    Boolean(elegidas[tr.getAttribute("data-categoria")]) ||
+                    filaConDatos(tr);
                 tr.hidden = !mostrar;
                 if (mostrar) visibles += 1;
             });
@@ -292,21 +310,19 @@
         Array.prototype.forEach.call(ingresoChecks, function (cb) {
             cb.addEventListener("change", refrescarIngreso);
         });
+        // Al escribir en una fila queda "fijada": aunque despues desmarques su
+        // categoria, sigue a la vista.
+        ingresoForm.addEventListener("input", function (event) {
+            if (event.target.closest("[data-ingreso-tabla]")) refrescarIngreso();
+        });
         refrescarIngreso();
-
-        var ingresoAviso = ingresoForm.querySelector("[data-ingreso-aviso]");
-
-        var valorFila = function (tr, sufijo) {
-            var el = tr.querySelector('[name$="-' + sufijo + '"]');
-            return el ? String(el.value).trim() : "";
-        };
 
         var mostrarAviso = function (problemas) {
             if (!ingresoAviso) return;
             ingresoAviso.textContent =
                 problemas.length === 1
                     ? problemas[0]
-                    : "Revisa estas filas: " + problemas.join("  ·  ");
+                    : "Revisa: " + problemas.join("  ·  ");
             ingresoAviso.style.display = "";
             ingresoAviso.scrollIntoView({ block: "center", behavior: "smooth" });
         };
@@ -320,26 +336,29 @@
         };
 
         // La tabla trae una fila (formset) por producto activo. Antes de
-        // enviar: (1) se valida en el navegador para no mandar a guardar algo
-        // incompleto, y (2) se deshabilitan las filas sin tocar, para que el
-        // POST solo lleve unas pocas y no lo rechace Django por tamaño.
+        // enviar: (1) se valida en el navegador para no mandar algo incompleto
+        // y (2) se deshabilitan las filas sin tocar, para que el POST solo
+        // lleve unas pocas y no lo rechace Django por tamaño.
         ingresoForm.addEventListener("submit", function (event) {
             if (ingresoAviso) ingresoAviso.style.display = "none";
 
             var problemas = [];
             var conCantidad = 0;
 
+            var cab = function (n) {
+                var el = ingresoForm.querySelector('[name="' + n + '"]');
+                return el ? String(el.value).trim() : "";
+            };
+            if (!cab("marca") || !cab("modelo") || !cab("anio")) {
+                problemas.push("completa marca, modelo y año del vehículo");
+            }
+
             ingresoFilas.forEach(function (tr) {
                 var nombreEl = tr.querySelector("strong");
                 var nombre = nombreEl ? nombreEl.textContent.trim() : "producto";
                 var cantidad = valorFila(tr, "cantidad");
-                var costo = valorFila(tr, "costo");
-                var precio = valorFila(tr, "precio_venta");
-                var veh = [valorFila(tr, "marca"), valorFila(tr, "modelo"), valorFila(tr, "anio")];
-                var vehLlenos = veh.filter(Boolean).length;
-                var tocada = cantidad || costo || precio || vehLlenos;
 
-                if (!tocada) {
+                if (!filaConDatos(tr)) {
                     Array.prototype.forEach.call(tr.querySelectorAll("input"), function (inp) {
                         inp.disabled = true;
                     });
@@ -350,9 +369,6 @@
                     problemas.push(nombre + " (falta la cantidad)");
                 } else {
                     conCantidad += 1;
-                }
-                if (vehLlenos > 0 && vehLlenos < 3) {
-                    problemas.push(nombre + " (completa marca, modelo y año)");
                 }
             });
 
@@ -365,7 +381,7 @@
             if (conCantidad === 0) {
                 event.preventDefault();
                 reactivarFilas();
-                mostrarAviso(["Escribe la cantidad recibida de al menos un producto."]);
+                mostrarAviso(["escribe la cantidad recibida de al menos un producto"]);
             }
         });
     }

@@ -5,8 +5,8 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from ..models import DetalleEntrada, Entrada, Marca, Modelo, Producto, Vehiculo
-from ..permisos import permiso_requerido
-from .forms import IngresoLineaForm
+from ..permisos import permiso_requerido, tiene_permiso
+from .forms import IngresoCabeceraForm, IngresoLineaForm
 
 IngresoFormSet = formset_factory(IngresoLineaForm, extra=0)
 
@@ -14,69 +14,54 @@ IngresoFormSet = formset_factory(IngresoLineaForm, extra=0)
 def _productos_activos():
     return (
         Producto.objects.filter(fecha_eliminacion__isnull=True)
-        .select_related("categoria", "vehiculo__modelo__marca")
+        .select_related("categoria")
         .order_by("categoria__nombre_categoria", "nombre")
     )
 
 
 def _initial_de(producto):
-    inicial = {
+    return {
         "producto": producto.pk,
         "costo": producto.costo,
         "precio_venta": producto.precio_venta,
     }
-    if producto.vehiculo_id:
-        veh = producto.vehiculo
-        inicial.update(
-            marca=veh.modelo.marca.nombre_marca,
-            modelo=veh.modelo.nombre_modelo,
-            anio=veh.anio,
-        )
-    return inicial
 
 
-def _vehiculo_de_fila(datos):
+def _vehiculo_de_cabecera(datos):
     marca, _ = Marca.objects.get_or_create(nombre_marca=datos["marca"].strip())
     modelo, _ = Modelo.objects.get_or_create(
         marca=marca, nombre_modelo=datos["modelo"].strip()
     )
-    vehiculo, _ = Vehiculo.objects.get_or_create(modelo=modelo, anio=datos["anio"])
+    tipo = (datos.get("tipo") or "").strip()
+    vehiculo, creado = Vehiculo.objects.get_or_create(
+        modelo=modelo, anio=datos["anio"], defaults={"tipo": tipo}
+    )
+    if tipo and not creado and vehiculo.tipo != tipo:
+        vehiculo.tipo = tipo
+        vehiculo.save(update_fields=["tipo"])
     return vehiculo
 
 
-def _guardar_ingreso(usuario, lineas):
+def _guardar_ingreso(usuario, cabecera, lineas):
     with transaction.atomic():
-        # `fecha` es la fecha de negocio del ingreso; se toma del sistema al
-        # guardar. `fecha_registro` (auto_now_add) guarda el timestamp exacto.
+        vehiculo = _vehiculo_de_cabecera(cabecera)
         entrada = Entrada.objects.create(
-            fecha=timezone.localdate(), usuario=usuario
+            fecha=cabecera["fecha"], usuario=usuario, vehiculo=vehiculo
         )
-        vehiculos_usados = set()
         for datos in lineas:
             producto = datos["producto"]
             DetalleEntrada.objects.create(
                 entrada=entrada, producto=producto, cantidad=datos["cantidad"]
             )
-            campos = []
+            campos = ["vehiculo"]
+            producto.vehiculo = vehiculo
             if datos.get("costo") is not None:
                 producto.costo = datos["costo"]
                 campos.append("costo")
             if datos.get("precio_venta") is not None:
                 producto.precio_venta = datos["precio_venta"]
                 campos.append("precio_venta")
-            if datos.get("marca"):
-                vehiculo = _vehiculo_de_fila(datos)
-                producto.vehiculo = vehiculo
-                vehiculos_usados.add(vehiculo.pk)
-                campos.append("vehiculo")
-            if campos:
-                producto.save(update_fields=campos)
-
-        # Si todas las piezas del ingreso salieron del mismo vehiculo, queda
-        # anotado en la entrada (Entrada.vehiculo = el auto del que se desarma).
-        if len(vehiculos_usados) == 1:
-            entrada.vehiculo_id = next(iter(vehiculos_usados))
-            entrada.save(update_fields=["vehiculo"])
+            producto.save(update_fields=campos)
     return entrada
 
 
@@ -85,8 +70,9 @@ def ingreso_crear(request):
     productos = list(_productos_activos())
 
     if request.method == "POST":
+        cabecera = IngresoCabeceraForm(request.POST)
         formset = IngresoFormSet(request.POST)
-        if not formset.is_valid():
+        if not (cabecera.is_valid() and formset.is_valid()):
             messages.error(
                 request,
                 "No se guardó el ingreso: revisa los datos marcados en rojo.",
@@ -102,13 +88,14 @@ def ingreso_crear(request):
                     request, "Ingresa la cantidad recibida de al menos un producto."
                 )
             else:
-                _guardar_ingreso(request.user, lineas)
+                _guardar_ingreso(request.user, cabecera.cleaned_data, lineas)
                 messages.success(
                     request,
-                    f"Ingreso registrado: {len(lineas)} producto(s) actualizado(s).",
+                    f"Ingreso registrado: {len(lineas)} producto(s).",
                 )
                 return redirect("ingresos")
     else:
+        cabecera = IngresoCabeceraForm(initial={"fecha": timezone.localdate()})
         formset = IngresoFormSet(initial=[_initial_de(p) for p in productos])
 
     productos_por_id = {p.pk: p for p in productos}
@@ -123,5 +110,45 @@ def ingreso_crear(request):
     return render(
         request,
         "inventario/ingresos/ingreso_form.html",
-        {"formset": formset, "filas": filas, "categorias": categorias},
+        {"cabecera": cabecera, "formset": formset, "filas": filas, "categorias": categorias},
+    )
+
+
+@permiso_requerido("ingresos", "ver")
+def ingresos_lista(request):
+    entradas = (
+        Entrada.objects.select_related(
+            "vehiculo__modelo__marca", "usuario"
+        )
+        .prefetch_related("detalles__producto__categoria")
+        .order_by("-fecha", "-id_entrada")
+    )
+
+    desde = request.GET.get("desde") or ""
+    hasta = request.GET.get("hasta") or ""
+    if desde:
+        entradas = entradas.filter(fecha__gte=desde)
+    if hasta:
+        entradas = entradas.filter(fecha__lte=hasta)
+
+    filas = []
+    for entrada in entradas:
+        detalles = list(entrada.detalles.all())
+        filas.append(
+            {
+                "entrada": entrada,
+                "detalles": detalles,
+                "unidades": sum(d.cantidad for d in detalles),
+            }
+        )
+
+    return render(
+        request,
+        "inventario/ingresos/ingreso_list.html",
+        {
+            "filas": filas,
+            "desde": desde,
+            "hasta": hasta,
+            "puede_crear": tiene_permiso(request.user, "ingresos", "crear"),
+        },
     )
