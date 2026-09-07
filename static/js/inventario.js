@@ -253,6 +253,48 @@
         });
     }
 
+    var ingresoForm = document.querySelector("[data-ingreso-form]");
+    if (ingresoForm) {
+        var ingresoChecks = ingresoForm.querySelectorAll("[data-cat-check]");
+        var ingresoFilas = Array.prototype.slice.call(
+            ingresoForm.querySelectorAll("[data-ingreso-tabla] tbody tr[data-categoria]")
+        );
+        var ingresoVacio = ingresoForm.querySelector("[data-ingreso-vacio]");
+        var ingresoContador = ingresoForm.querySelector("[data-ingreso-contador]");
+
+        var refrescarIngreso = function () {
+            var elegidas = {};
+            Array.prototype.forEach.call(ingresoChecks, function (cb) {
+                if (cb.checked) elegidas[cb.value] = true;
+            });
+            var hayFiltro = Object.keys(elegidas).length > 0;
+            var visibles = 0;
+            ingresoFilas.forEach(function (tr) {
+                var mostrar = hayFiltro && elegidas[tr.getAttribute("data-categoria")];
+                tr.hidden = !mostrar;
+                if (mostrar) visibles += 1;
+            });
+            if (ingresoVacio) {
+                ingresoVacio.hidden = visibles > 0;
+                var celda = ingresoVacio.querySelector("td");
+                if (celda) {
+                    celda.textContent = hayFiltro
+                        ? "Ninguna de las categorías marcadas tiene productos."
+                        : "Marca una categoría arriba para ver sus productos.";
+                }
+            }
+            if (ingresoContador) {
+                ingresoContador.textContent =
+                    visibles + (visibles === 1 ? " producto visible" : " productos visibles");
+            }
+        };
+
+        Array.prototype.forEach.call(ingresoChecks, function (cb) {
+            cb.addEventListener("change", refrescarIngreso);
+        });
+        refrescarIngreso();
+    }
+
     var form = document.querySelector(".product-filtros");
     if (!form) return;
 

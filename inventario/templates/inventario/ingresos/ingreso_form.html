@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
+{% block title %}Ingresos · Inventario{% endblock %}
+
+{% block content %}
+<div class="inventory-page-head">
+    <div>
+        <p class="eyebrow">Movimientos de inventario</p>
+        <h1>Registrar ingreso de productos</h1>
+    </div>
+</div>
+
+<form method="post" data-ingreso-form>
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+    {% if formset.non_form_errors %}
+    {% for error in formset.non_form_errors %}<p class="alert alert-error">{{ error }}</p>{% endfor %}
+    {% endif %}
+
+    <section class="carga-card">
+        <h2>1 · Datos del ingreso</h2>
+        <div class="filter-field">
+            {{ cabecera.fecha.label_tag }}
+            {{ cabecera.fecha }}
+            {% for error in cabecera.fecha.errors %}<small class="errorlist">{{ error }}</small>{% endfor %}
+        </div>
+    </section>
+
+    <section class="carga-card" style="margin-top:18px;">
+        <h2>2 · Elegir categorías</h2>
+        <p class="inventory-muted">Marca una o más categorías para ver sus productos.</p>
+        <div class="categoria-checks" data-ingreso-categorias>
+            {% for categoria in categorias %}
+            <label class="categoria-check">
+                <input type="checkbox" value="{{ categoria.pk }}" data-cat-check>
+                {{ categoria.nombre_categoria }}
+            </label>
+            {% empty %}
+            <p class="inventory-muted">No hay productos activos para ingresar.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="table-panel" style="margin-top:18px;">
+        <div class="table-panel__header">
+            <div>
+                <h2>3 · Productos y datos del ingreso</h2>
+                <p class="table-count" data-ingreso-contador>0 productos visibles</p>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar ingreso</button>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table" data-ingreso-tabla>
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Categoría</th>
+                        <th>Cantidad recibida</th>
+                        <th>Costo</th>
+                        <th>Precio venta</th>
+                        <th>Marca</th>
+                        <th>Modelo</th>
+                        <th>Año</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for form, producto in filas %}
+                <tr data-categoria="{{ producto.categoria_id }}" hidden>
+                    <td>
+                        {{ form.producto }}
+                        <strong>{{ producto.nombre }}</strong>
+                        {% if producto.codigo %}<br><small class="inventory-muted">{{ producto.codigo }}</small>{% endif %}
+                        {% for error in form.non_field_errors %}<br><small class="errorlist">{{ error }}</small>{% endfor %}
+                    </td>
+                    <td>{{ producto.categoria.nombre_categoria }}</td>
+                    <td>{{ form.cantidad }}{% for e in form.cantidad.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
+                    <td>{{ form.costo }}{% for e in form.costo.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
+                    <td>{{ form.precio_venta }}{% for e in form.precio_venta.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
+                    <td>{{ form.marca }}{% for e in form.marca.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
+                    <td>{{ form.modelo }}{% for e in form.modelo.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
+                    <td>{{ form.anio }}{% for e in form.anio.errors %}<br><small class="errorlist">{{ e }}</small>{% endfor %}</td>
+                </tr>
+                {% endfor %}
+                <tr data-ingreso-vacio>
+                    <td colspan="8" class="empty-state">Marca una categoría arriba para ver sus productos.</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</form>
+{% endblock %}

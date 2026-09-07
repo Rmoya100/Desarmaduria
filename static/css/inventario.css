@@ -276,3 +276,30 @@
 .bulk-changes label { font-size: 0.78rem; color: var(--color-text-muted); }
 
 .bulk-select-cell { width: 34px; text-align: center; }
+
+/* Pantalla de ingresos: checkboxes de categoria + tabla de captura por fila */
+.categoria-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    margin-top: 12px;
+}
+
+.categoria-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.categoria-check:has(input:checked) {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+[data-ingreso-tabla] td .input-control { min-width: 84px; }
+[data-ingreso-tabla] td { vertical-align: top; }
