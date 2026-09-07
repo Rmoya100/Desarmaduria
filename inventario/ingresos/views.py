@@ -77,7 +77,12 @@ def ingreso_crear(request):
 
     if request.method == "POST":
         formset = IngresoFormSet(request.POST)
-        if formset.is_valid():
+        if not formset.is_valid():
+            messages.error(
+                request,
+                "No se guardó el ingreso: revisa los datos marcados en rojo.",
+            )
+        else:
             lineas = [
                 form.cleaned_data
                 for form in formset.forms

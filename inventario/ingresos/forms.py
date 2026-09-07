@@ -68,6 +68,17 @@ class IngresoLineaForm(forms.Form):
 
     CAMPOS_VEHICULO = ("marca", "modelo", "anio")
     CAMPOS_PRODUCTO = ("costo", "precio_venta", "marca", "modelo", "anio")
+    # Estos campos se muestran vacios con el valor actual como placeholder: asi
+    # una fila que el usuario no toco queda realmente vacia (no se envia) y
+    # dejar el campo en blanco significa "no cambiar".
+    CAMPOS_VALOR_ACTUAL = ("costo", "precio_venta", "marca", "modelo", "anio")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for campo in self.CAMPOS_VALOR_ACTUAL:
+            actual = self.initial.pop(campo, None)
+            if actual not in (None, ""):
+                self.fields[campo].widget.attrs["placeholder"] = str(actual)
 
     def clean(self):
         datos = super().clean()

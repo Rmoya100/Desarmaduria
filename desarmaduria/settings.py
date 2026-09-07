@@ -189,6 +189,12 @@ STORAGES = {
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# La pantalla de Ingresos manda un formset con una fila por producto activo
+# (~7 campos c/u). El JS deshabilita las filas vacias antes de enviar, asi
+# que un ingreso normal manda pocos campos; esto es el margen para cuando se
+# cargan muchos productos de una vez o el navegador no ejecuta el JS.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 

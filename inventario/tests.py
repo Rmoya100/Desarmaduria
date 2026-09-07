@@ -432,6 +432,24 @@ class IngresoTests(TestCase):
         self.assertEqual(DetalleEntrada.objects.count(), 1)
         self.assertEqual(DetalleEntrada.objects.get().producto, self.producto)
 
+    def test_formset_disperso_ignora_filas_ausentes(self):
+        # El JS deshabilita las filas sin tocar, asi que el POST solo trae
+        # algunas de las TOTAL_FORMS filas. El formset debe aceptarlo.
+        Producto.objects.create(
+            categoria=self.categoria, nombre="Radiador", costo=Decimal("1")
+        )
+        data = {
+            f"{self.prefix}-TOTAL_FORMS": "2",
+            f"{self.prefix}-INITIAL_FORMS": "0",
+            f"{self.prefix}-MIN_NUM_FORMS": "0",
+            f"{self.prefix}-MAX_NUM_FORMS": "1000",
+            f"{self.prefix}-0-producto": self.producto.pk,
+            f"{self.prefix}-0-cantidad": "4",
+        }
+        response = self.client.post(reverse("ingresos"), data)
+        self.assertRedirects(response, reverse("ingresos"))
+        self.assertEqual(DetalleEntrada.objects.count(), 1)
+
     def test_datos_de_producto_sin_cantidad_es_error(self):
         response = self._post(
             [{"producto": self.producto.pk, "cantidad": "", "costo": "1500"}]

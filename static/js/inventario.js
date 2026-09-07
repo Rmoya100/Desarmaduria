@@ -293,6 +293,81 @@
             cb.addEventListener("change", refrescarIngreso);
         });
         refrescarIngreso();
+
+        var ingresoAviso = ingresoForm.querySelector("[data-ingreso-aviso]");
+
+        var valorFila = function (tr, sufijo) {
+            var el = tr.querySelector('[name$="-' + sufijo + '"]');
+            return el ? String(el.value).trim() : "";
+        };
+
+        var mostrarAviso = function (problemas) {
+            if (!ingresoAviso) return;
+            ingresoAviso.textContent =
+                problemas.length === 1
+                    ? problemas[0]
+                    : "Revisa estas filas: " + problemas.join("  ·  ");
+            ingresoAviso.hidden = false;
+            ingresoAviso.scrollIntoView({ block: "center", behavior: "smooth" });
+        };
+
+        var reactivarFilas = function () {
+            ingresoFilas.forEach(function (tr) {
+                Array.prototype.forEach.call(tr.querySelectorAll("input"), function (inp) {
+                    inp.disabled = false;
+                });
+            });
+        };
+
+        // La tabla trae una fila (formset) por producto activo. Antes de
+        // enviar: (1) se valida en el navegador para no mandar a guardar algo
+        // incompleto, y (2) se deshabilitan las filas sin tocar, para que el
+        // POST solo lleve unas pocas y no lo rechace Django por tamaño.
+        ingresoForm.addEventListener("submit", function (event) {
+            if (ingresoAviso) ingresoAviso.hidden = true;
+
+            var problemas = [];
+            var conCantidad = 0;
+
+            ingresoFilas.forEach(function (tr) {
+                var nombreEl = tr.querySelector("strong");
+                var nombre = nombreEl ? nombreEl.textContent.trim() : "producto";
+                var cantidad = valorFila(tr, "cantidad");
+                var costo = valorFila(tr, "costo");
+                var precio = valorFila(tr, "precio_venta");
+                var veh = [valorFila(tr, "marca"), valorFila(tr, "modelo"), valorFila(tr, "anio")];
+                var vehLlenos = veh.filter(Boolean).length;
+                var tocada = cantidad || costo || precio || vehLlenos;
+
+                if (!tocada) {
+                    Array.prototype.forEach.call(tr.querySelectorAll("input"), function (inp) {
+                        inp.disabled = true;
+                    });
+                    return;
+                }
+
+                if (!cantidad || parseInt(cantidad, 10) < 1) {
+                    problemas.push(nombre + " (falta la cantidad)");
+                } else {
+                    conCantidad += 1;
+                }
+                if (vehLlenos > 0 && vehLlenos < 3) {
+                    problemas.push(nombre + " (completa marca, modelo y año)");
+                }
+            });
+
+            if (problemas.length) {
+                event.preventDefault();
+                reactivarFilas();
+                mostrarAviso(problemas);
+                return;
+            }
+            if (conCantidad === 0) {
+                event.preventDefault();
+                reactivarFilas();
+                mostrarAviso(["Escribe la cantidad recibida de al menos un producto."]);
+            }
+        });
     }
 
     var form = document.querySelector(".product-filtros");

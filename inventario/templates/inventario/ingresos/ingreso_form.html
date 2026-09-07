@@ -7,7 +7,6 @@
 {% block content %}
 <div class="inventory-page-head">
     <div>
-        <p class="eyebrow">Movimientos de inventario</p>
         <h1>Registrar ingreso de productos</h1>
     </div>
 </div>
@@ -16,13 +15,15 @@
     {% csrf_token %}
     {{ formset.management_form }}
 
+    <p class="alert alert-error" data-ingreso-aviso hidden></p>
+
     {% if formset.non_form_errors %}
     {% for error in formset.non_form_errors %}<p class="alert alert-error">{{ error }}</p>{% endfor %}
     {% endif %}
 
     <section class="carga-card">
         <h2>1 · Elegir categorías</h2>
-        <p class="inventory-muted">Marca una o más categorías para ver sus productos. La fecha del ingreso queda registrada automáticamente al guardar.</p>
+        <p class="inventory-muted">Marca una o más categorías para ver sus productos.</p>
         <div class="categoria-checks" data-ingreso-categorias>
             {% for categoria in categorias %}
             <label class="categoria-check">
@@ -40,6 +41,7 @@
             <div>
                 <h2>2 · Productos y datos del ingreso</h2>
                 <p class="table-count" data-ingreso-contador>0 productos visibles</p>
+                <p class="inventory-muted">Deja en blanco lo que no cambie. Solo se ingresan las filas con cantidad.</p>
             </div>
             <button type="submit" class="btn btn-primary">Guardar ingreso</button>
         </div>
@@ -64,6 +66,7 @@
                         {{ form.producto }}
                         <strong>{{ producto.nombre }}</strong>
                         {% if producto.codigo %}<br><small class="inventory-muted">{{ producto.codigo }}</small>{% endif %}
+                        {% if producto.vehiculo %}<br><small class="inventory-muted">Vehículo actual: {{ producto.vehiculo }}</small>{% endif %}
                         {% for error in form.non_field_errors %}<br><small class="errorlist">{{ error }}</small>{% endfor %}
                     </td>
                     <td>{{ producto.categoria.nombre_categoria }}</td>
@@ -85,4 +88,4 @@
 </form>
 {% endblock %}
 
-{% block extra_js %}<script src="{% static 'js/inventario.js' %}?v=4"></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/inventario.js' %}"></script>{% endblock %}
