@@ -307,7 +307,7 @@
                 problemas.length === 1
                     ? problemas[0]
                     : "Revisa estas filas: " + problemas.join("  ·  ");
-            ingresoAviso.hidden = false;
+            ingresoAviso.style.display = "";
             ingresoAviso.scrollIntoView({ block: "center", behavior: "smooth" });
         };
 
@@ -324,7 +324,7 @@
         // incompleto, y (2) se deshabilitan las filas sin tocar, para que el
         // POST solo lleve unas pocas y no lo rechace Django por tamaño.
         ingresoForm.addEventListener("submit", function (event) {
-            if (ingresoAviso) ingresoAviso.hidden = true;
+            if (ingresoAviso) ingresoAviso.style.display = "none";
 
             var problemas = [];
             var conCantidad = 0;
