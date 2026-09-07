@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from ..models import DetalleEntrada, Entrada, Marca, Modelo, Producto, Vehiculo
 from ..permisos import permiso_requerido
-from .forms import IngresoCabeceraForm, IngresoLineaForm
+from .forms import IngresoLineaForm
 
 IngresoFormSet = formset_factory(IngresoLineaForm, extra=0)
 
@@ -44,9 +44,13 @@ def _asignar_vehiculo(datos):
     return vehiculo
 
 
-def _guardar_ingreso(usuario, fecha, lineas):
+def _guardar_ingreso(usuario, lineas):
     with transaction.atomic():
-        entrada = Entrada.objects.create(fecha=fecha, usuario=usuario)
+        # `fecha` es la fecha de negocio del ingreso; se toma del sistema al
+        # guardar. `fecha_registro` (auto_now_add) guarda el timestamp exacto.
+        entrada = Entrada.objects.create(
+            fecha=timezone.localdate(), usuario=usuario
+        )
         for datos in lineas:
             producto = datos["producto"]
             DetalleEntrada.objects.create(
@@ -72,9 +76,8 @@ def ingreso_crear(request):
     productos = list(_productos_activos())
 
     if request.method == "POST":
-        cabecera = IngresoCabeceraForm(request.POST)
         formset = IngresoFormSet(request.POST)
-        if cabecera.is_valid() and formset.is_valid():
+        if formset.is_valid():
             lineas = [
                 form.cleaned_data
                 for form in formset.forms
@@ -85,14 +88,13 @@ def ingreso_crear(request):
                     request, "Ingresa la cantidad recibida de al menos un producto."
                 )
             else:
-                _guardar_ingreso(request.user, cabecera.cleaned_data["fecha"], lineas)
+                _guardar_ingreso(request.user, lineas)
                 messages.success(
                     request,
                     f"Ingreso registrado: {len(lineas)} producto(s) actualizado(s).",
                 )
                 return redirect("ingresos")
     else:
-        cabecera = IngresoCabeceraForm(initial={"fecha": timezone.localdate()})
         formset = IngresoFormSet(initial=[_initial_de(p) for p in productos])
 
     productos_por_id = {p.pk: p for p in productos}
@@ -107,10 +109,5 @@ def ingreso_crear(request):
     return render(
         request,
         "inventario/ingresos/ingreso_form.html",
-        {
-            "cabecera": cabecera,
-            "formset": formset,
-            "filas": filas,
-            "categorias": categorias,
-        },
+        {"formset": formset, "filas": filas, "categorias": categorias},
     )

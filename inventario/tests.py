@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .forms import DetalleVentaFormSet
 from .ingresos.views import IngresoFormSet
@@ -333,10 +334,10 @@ class IngresoTests(TestCase):
         )
         self.prefix = IngresoFormSet().prefix
 
-    def _post(self, lineas, fecha="2026-02-01"):
-        data = {"fecha": fecha}
-        data.update(datos_formset(self.prefix, lineas))
-        return self.client.post(reverse("ingresos"), data)
+    def _post(self, lineas):
+        return self.client.post(
+            reverse("ingresos"), datos_formset(self.prefix, lineas)
+        )
 
     def test_anonimo_redirige_a_login(self):
         self.client.logout()
@@ -355,6 +356,8 @@ class IngresoTests(TestCase):
         html = self.client.get(reverse("ingresos")).content.decode()
         self.assertIn("Motor", html)
         self.assertIn("data-ingreso-tabla", html)
+        # El filtro de categorias depende de que se cargue inventario.js.
+        self.assertIn("js/inventario.js", html)
 
     def test_registra_entrada_y_actualiza_precio(self):
         response = self._post(
@@ -369,6 +372,7 @@ class IngresoTests(TestCase):
         )
         self.assertRedirects(response, reverse("ingresos"))
         self.assertEqual(Entrada.objects.count(), 1)
+        self.assertEqual(Entrada.objects.get().fecha, timezone.localdate())
         detalle = DetalleEntrada.objects.get()
         self.assertEqual(detalle.producto, self.producto)
         self.assertEqual(detalle.cantidad, 5)

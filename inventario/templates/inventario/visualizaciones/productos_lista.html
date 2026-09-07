@@ -118,4 +118,4 @@
 <div class="inventory-modal{% if abrir_modal %} inventory-modal--open{% endif %}" id="producto-modal" aria-hidden="{% if abrir_modal %}false{% else %}true{% endif %}"><div class="inventory-modal__dialog"><a href="#" class="inventory-modal__close" data-modal-close aria-label="Cerrar">&times;</a><h2>Nuevo producto</h2><form method="post" action="{% url 'producto_crear' %}">{% csrf_token %}{{ form.as_p }}<div class="inventory-modal__actions"><a href="#" class="btn" data-modal-close>Cancelar</a><button class="btn btn-primary" type="submit">Guardar producto</button></div></form></div></div>
 {% endblock %}
 
-{% block extra_js %}<script src="{% static 'js/inventario.js' %}?v=3"></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/inventario.js' %}?v=4"></script>{% endblock %}

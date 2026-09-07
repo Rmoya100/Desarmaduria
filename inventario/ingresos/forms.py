@@ -9,13 +9,6 @@ from ..models import Producto
 ANIO_MAX = date.today().year + 1
 
 
-class IngresoCabeceraForm(forms.Form):
-    fecha = forms.DateField(
-        label="Fecha del ingreso",
-        widget=forms.DateInput(attrs={"type": "date", "class": "input-control"}),
-    )
-
-
 class IngresoLineaForm(forms.Form):
     """Una fila de la pantalla de ingresos: un producto ya existente al que se
     le informa la cantidad recibida y, opcionalmente, se le corrige costo,

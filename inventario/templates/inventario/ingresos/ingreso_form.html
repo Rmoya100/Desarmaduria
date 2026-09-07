@@ -21,17 +21,8 @@
     {% endif %}
 
     <section class="carga-card">
-        <h2>1 · Datos del ingreso</h2>
-        <div class="filter-field">
-            {{ cabecera.fecha.label_tag }}
-            {{ cabecera.fecha }}
-            {% for error in cabecera.fecha.errors %}<small class="errorlist">{{ error }}</small>{% endfor %}
-        </div>
-    </section>
-
-    <section class="carga-card" style="margin-top:18px;">
-        <h2>2 · Elegir categorías</h2>
-        <p class="inventory-muted">Marca una o más categorías para ver sus productos.</p>
+        <h2>1 · Elegir categorías</h2>
+        <p class="inventory-muted">Marca una o más categorías para ver sus productos. La fecha del ingreso queda registrada automáticamente al guardar.</p>
         <div class="categoria-checks" data-ingreso-categorias>
             {% for categoria in categorias %}
             <label class="categoria-check">
@@ -47,7 +38,7 @@
     <section class="table-panel" style="margin-top:18px;">
         <div class="table-panel__header">
             <div>
-                <h2>3 · Productos y datos del ingreso</h2>
+                <h2>2 · Productos y datos del ingreso</h2>
                 <p class="table-count" data-ingreso-contador>0 productos visibles</p>
             </div>
             <button type="submit" class="btn btn-primary">Guardar ingreso</button>
@@ -93,3 +84,5 @@
     </section>
 </form>
 {% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/inventario.js' %}?v=4"></script>{% endblock %}
