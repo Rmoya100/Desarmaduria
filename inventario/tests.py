@@ -292,12 +292,11 @@ class SidebarSubmenuTests(TestCase):
         self.assertIn("<summary", html)
         # La clase antigua ya no debe decidir la visibilidad del submenu.
         self.assertNotIn("nav-group--active", html)
-        self.assertEqual(html.count('class="nav-sublink'), 3)
-        # Debe existir un unico <details>: si un comentario `{# #}` quedara
-        # abierto, su texto se emitiria literal y el `<details>` que menciona
-        # se parsearia como etiqueta real, dejando el menu dentro de un
-        # desplegable cerrado e invisible.
-        self.assertEqual(html.count("<details"), 1)
+        # El sidebar tiene dos grupos desplegables: Inventario y Productos.
+        # Si un comentario `{# #}` quedara abierto, su texto se emitiria
+        # literal y apareceria un <details> de mas (o de menos).
+        self.assertEqual(html.count("<details"), 2)
+        self.assertEqual(html.count('class="nav-sublink'), 5)
 
     def test_las_plantillas_no_emiten_comentarios_literales(self):
         """`{# ... #}` solo comenta una linea. Si se abre y no se cierra en la
