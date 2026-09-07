@@ -115,6 +115,19 @@ class Usuario(AbstractUser):
 # ---------------------------------------------------------------------------
 # Vehiculos
 # ---------------------------------------------------------------------------
+def normalizar_texto(valor):
+    """Estandariza los textos que identifican un vehiculo (marca, modelo,
+    tipo, patente): sin espacios sobrantes y en MAYUSCULAS.
+
+    Se aplica en `save()` y no solo en el formulario para que el dato quede
+    igual venga de donde venga: el modulo de ingresos, el Django Admin o un
+    comando de carga masiva.
+    """
+    if not valor:
+        return valor
+    return " ".join(str(valor).split()).upper()
+
+
 class Marca(models.Model):
     id_marca = models.AutoField(primary_key=True, db_column="idMarca")
     nombre_marca = models.CharField(
@@ -124,8 +137,35 @@ class Marca(models.Model):
     class Meta:
         db_table = "marca"
 
+    def save(self, *args, **kwargs):
+        self.nombre_marca = normalizar_texto(self.nombre_marca)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.nombre_marca
+
+
+class TipoVehiculo(models.Model):
+    """Carroceria del vehiculo: SEDAN, SUV, CAMIONETA, FURGON..."""
+
+    id_tipo_vehiculo = models.AutoField(
+        primary_key=True, db_column="idTipoVehiculo"
+    )
+    nombre_tipo = models.CharField(
+        max_length=50, unique=True, db_column="nombreTipo"
+    )
+
+    class Meta:
+        db_table = "tipoVehiculo"
+        verbose_name = "tipo de vehiculo"
+        verbose_name_plural = "tipos de vehiculo"
+
+    def save(self, *args, **kwargs):
+        self.nombre_tipo = normalizar_texto(self.nombre_tipo)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.nombre_tipo
 
 
 class Modelo(models.Model):
@@ -143,11 +183,23 @@ class Modelo(models.Model):
             )
         ]
 
+    def save(self, *args, **kwargs):
+        self.nombre_modelo = normalizar_texto(self.nombre_modelo)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.marca} {self.nombre_modelo}"
 
 
 class Vehiculo(models.Model):
+    """Ficha de vehiculo: marca + modelo + tipo + rango de anios.
+
+    No representa un auto fisico concreto sino una generacion del modelo:
+    una misma pieza sirve para todos los anios del rango, asi que dos compras
+    con los mismos datos reutilizan la misma ficha (ver
+    `servicios.ingresos.obtener_o_crear_vehiculo`).
+    """
+
     id_vehiculo = models.AutoField(primary_key=True, db_column="idVehiculo")
     modelo = models.ForeignKey(
         Modelo,
@@ -155,7 +207,20 @@ class Vehiculo(models.Model):
         db_column="idModelo",
         related_name="vehiculos",
     )
-    anio = models.PositiveSmallIntegerField(db_column="anio")
+    tipo_vehiculo = models.ForeignKey(
+        TipoVehiculo,
+        on_delete=models.PROTECT,
+        db_column="idTipoVehiculo",
+        related_name="vehiculos",
+        null=True,
+        blank=True,
+    )
+    # Conserva la columna `anio` original del esquema; el nombre en Python
+    # cambia a `anio_desde` para que quede claro que es el inicio del rango.
+    anio_desde = models.PositiveSmallIntegerField(db_column="anio")
+    anio_hasta = models.PositiveSmallIntegerField(
+        null=True, blank=True, db_column="anioHasta"
+    )
     patente = models.CharField(
         max_length=10, null=True, blank=True, unique=True, db_column="patente"
     )
@@ -163,8 +228,21 @@ class Vehiculo(models.Model):
     class Meta:
         db_table = "vehiculo"
 
+    @property
+    def rango_anios(self):
+        if self.anio_hasta and self.anio_hasta != self.anio_desde:
+            return f"{self.anio_desde}-{self.anio_hasta}"
+        return str(self.anio_desde)
+
+    def save(self, *args, **kwargs):
+        self.patente = normalizar_texto(self.patente) or None
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return self.patente or f"{self.modelo} ({self.anio})"
+        descripcion = f"{self.modelo} {self.rango_anios}"
+        if self.patente:
+            descripcion = f"{descripcion} · {self.patente}"
+        return descripcion
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +256,10 @@ class Categoria(models.Model):
 
     class Meta:
         db_table = "categoria"
+
+    def save(self, *args, **kwargs):
+        self.nombre_categoria = normalizar_texto(self.nombre_categoria)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.nombre_categoria
@@ -222,6 +304,13 @@ class Producto(models.Model):
         self.fecha_eliminacion = timezone.now()
         self.eliminado_por = usuario
         self.save(update_fields=["fecha_eliminacion", "eliminado_por"])
+
+    def save(self, *args, **kwargs):
+        # Mismo estandar que marca/modelo/categoria: sin esto, una pieza
+        # creada a mano como "puerta trasera" convivria en el catalogo con la
+        # "PUERTA TRASERA" importada del Excel como si fueran distintas.
+        self.nombre = normalizar_texto(self.nombre)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.nombre

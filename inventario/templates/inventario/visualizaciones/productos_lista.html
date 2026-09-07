@@ -33,7 +33,12 @@
                 <h2>Productos registrados</h2>
                 <p class="table-count">{{ productos|length }} productos encontrados</p>
             </div>
-            <a href="#producto-modal" class="btn btn-primary" data-modal-open="producto-modal">Nuevo producto</a>
+            <div class="table-panel__acciones">
+                {% if puede_importar %}
+                <a href="{% url 'productos_importar' %}" class="btn">Importar desde Excel</a>
+                {% endif %}
+                <a href="#producto-modal" class="btn btn-primary" data-modal-open="producto-modal">Nuevo producto</a>
+            </div>
         </div>
         <div class="table-scroll">
             <table class="data-table productos-tabla">

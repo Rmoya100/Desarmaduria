@@ -16,6 +16,7 @@ from .models import (
     Rol,
     RolPermiso,
     TipoDocumento,
+    TipoVehiculo,
     Usuario,
     Vehiculo,
     Venta,
@@ -84,9 +85,9 @@ class UsuarioAdmin(BaseUserAdmin):
 
 @admin.register(Vehiculo)
 class VehiculoAdmin(admin.ModelAdmin):
-    list_display = ("patente", "modelo", "anio")
-    list_filter = ("modelo__marca", "anio")
-    search_fields = ("patente",)
+    list_display = ("modelo", "tipo_vehiculo", "anio_desde", "anio_hasta", "patente")
+    list_filter = ("modelo__marca", "tipo_vehiculo", "anio_desde")
+    search_fields = ("patente", "modelo__nombre_modelo")
 
 
 @admin.register(Producto)
@@ -130,6 +131,7 @@ admin.site.register(
         RolPermiso,
         Marca,
         Modelo,
+        TipoVehiculo,
         Categoria,
         FormaPago,
         TipoDocumento,

@@ -226,3 +226,183 @@
         grid-template-columns: 1fr;
     }
 }
+/* Estilos del modulo de Ingresos */
+
+.ingreso-card {
+    margin-bottom: var(--spacing-4);
+}
+
+/* Los cinco datos del vehiculo en una sola fila. Las tres primeras columnas
+   pesan mas porque una marca puede ser "MERCEDES BENZ" y un anio son cuatro
+   digitos. La fila de la fecha usa la misma grilla (con el campo en la
+   primera columna) para que ambos campos queden alineados a la izquierda. */
+.ingreso-campos {
+    display: grid;
+    grid-template-columns: 1.3fr 1.3fr 1.3fr 0.9fr 0.9fr;
+    gap: var(--spacing-3);
+    align-items: start;
+}
+
+.ingreso-campos .field { margin: 0; min-width: 0; }
+.ingreso-campos .input-control { width: 100%; }
+
+/* Versalitas: mismo tratamiento que las etiquetas de .form-row en Ventas. */
+.ingreso-campos .field label {
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.ingreso-ayuda {
+    margin: 0 0 var(--spacing-3);
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
+
+/* Categorias como chips: una fila que solo se parte cuando no alcanza el
+   ancho, en vez de la grilla de columnas fijas de .checkbox-grid. */
+.ingreso-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+}
+
+.ingreso-chip { display: inline-flex; cursor: pointer; }
+
+.ingreso-chip__cara {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: 7px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.ingreso-chip:hover .ingreso-chip__cara { border-color: var(--color-primary); }
+
+/* El checkbox nativo esta oculto (.visually-hidden), asi que el anillo de
+   foco tiene que dibujarse aca o se pierde la navegacion por teclado. */
+.ingreso-chip input:focus-visible + .ingreso-chip__cara {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.ingreso-chip input:checked + .ingreso-chip__cara {
+    background: var(--color-info-bg);
+    border-color: var(--color-primary);
+    color: var(--color-primary-dark);
+}
+
+/* El estado marcado no se distingue solo por color (WCAG 1.4.1): el check
+   aparece solo cuando el chip esta seleccionado. */
+.ingreso-chip__check { visibility: hidden; font-size: 0.8rem; }
+.ingreso-chip input:checked + .ingreso-chip__cara .ingreso-chip__check {
+    visibility: visible;
+}
+
+.ingreso-chip__conteo {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.ingreso-chip input:checked + .ingreso-chip__cara .ingreso-chip__conteo {
+    background: var(--color-surface);
+    color: var(--color-primary-dark);
+}
+
+.ingreso-piezas__acciones {
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.ingreso-tabla__cantidad { width: 140px; text-align: right; }
+.ingreso-tabla__cantidad .input-control { width: 90px; text-align: right; }
+
+.ingreso-grupo th {
+    position: sticky;
+    top: 0;
+    background: var(--color-surface-alt, #f4f6f8);
+    color: var(--color-primary-dark);
+    text-align: left;
+}
+
+.ingreso-tabla tbody[hidden] { display: none; }
+.ingreso-tabla tr[hidden] { display: none; }
+
+.ingreso-resumen {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.ingreso-resumen p {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+.ingreso-resumen .form-actions { margin: 0; }
+
+.ingreso-ficha {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+    gap: 16px;
+    margin: 0;
+}
+
+.ingreso-ficha dt {
+    color: var(--color-text-muted);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.ingreso-ficha dd { margin: 4px 0 0; }
+
+.ingreso-lista-piezas {
+    margin: 12px 0 0;
+    padding-left: 20px;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+/* La fila de 5 se reparte por pasos: primero los tres textos arriba y los
+   dos anios abajo, luego 2 columnas y al final una sola. */
+@media (max-width: 1100px) {
+    .ingreso-campos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+    .ingreso-campos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ingreso-ficha { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+}
+
+@media (max-width: 480px) {
+    .ingreso-campos,
+    .ingreso-ficha { grid-template-columns: 1fr; }
+    .ingreso-piezas__acciones { width: 100%; }
+    .ingreso-resumen { align-items: stretch; flex-direction: column; }
+}
+
+.table-panel__acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}

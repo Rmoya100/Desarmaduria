@@ -1,6 +1,10 @@
 from django import forms
 
 from ..models import Categoria, Marca, Modelo, Producto, Vehiculo
+from ..servicios.catalogo import PlanillaInvalidaError, leer_planilla
+
+MAX_PLANILLA_BYTES = 5 * 1024 * 1024  # 5 MB
+EXTENSIONES_PERMITIDAS = (".xlsx", ".xlsm")
 
 
 class InventarioFiltroForm(forms.Form):
@@ -85,3 +89,40 @@ class ProductoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["vehiculo"].required = False
         self.fields["vehiculo"].empty_label = "Sin vehículo informado"
+
+
+class ImportarCatalogoForm(forms.Form):
+    """Sube la planilla y la interpreta en el mismo paso.
+
+    La lectura ocurre aqui (no en la vista) para que un archivo ilegible sea
+    un error de validacion normal del formulario, con su mensaje junto al
+    campo. El resultado queda en `self.lectura`.
+    """
+
+    archivo = forms.FileField(
+        label="Planilla Excel",
+        help_text=(
+            "Archivo .xlsx donde cada encabezado de columna es una categoría "
+            "y las filas de abajo son las piezas."
+        ),
+        widget=forms.ClearableFileInput(
+            attrs={"class": "input-control", "accept": ".xlsx,.xlsm"}
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lectura = None
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data["archivo"]
+        if archivo.size > MAX_PLANILLA_BYTES:
+            raise forms.ValidationError("La planilla no puede superar los 5 MB.")
+        if not archivo.name.lower().endswith(EXTENSIONES_PERMITIDAS):
+            raise forms.ValidationError("El archivo debe tener extensión .xlsx.")
+        try:
+            # Se abre de verdad: la extension sola no garantiza el contenido.
+            self.lectura = leer_planilla(archivo)
+        except PlanillaInvalidaError as error:
+            raise forms.ValidationError(str(error)) from error
+        return archivo

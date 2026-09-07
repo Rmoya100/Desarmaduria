@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Ingresos de inventario · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header page-header--actions">
+    <h1>Ingresos de inventario</h1>
+    <div class="page-header__actions">
+        {% if puede_crear %}
+        <a href="{% url 'ingreso_crear' %}" class="btn btn-primary">+ Nuevo ingreso</a>
+        {% endif %}
+    </div>
+</div>
+
+<form method="get" class="filter-bar">
+    <div class="form-group">
+        <label for="id_desde">Desde</label>
+        <input type="date" id="id_desde" name="desde" value="{{ desde }}" class="form-control">
+    </div>
+    <div class="form-group">
+        <label for="id_hasta">Hasta</label>
+        <input type="date" id="id_hasta" name="hasta" value="{{ hasta }}" class="form-control">
+    </div>
+    <div class="form-group filter-bar__actions">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        {% if desde or hasta %}
+        <a href="{% url 'ingresos' %}" class="btn">Limpiar</a>
+        {% endif %}
+    </div>
+</form>
+
+{% if ingresos %}
+<table>
+    <caption class="visually-hidden">Ingresos de inventario registrados</caption>
+    <thead>
+        <tr>
+            <th>Fecha</th>
+            <th>Vehículo</th>
+            <th>Tipo</th>
+            <th>Piezas</th>
+            <th>Unidades</th>
+            <th>Usuario</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for ingreso in ingresos %}
+        <tr>
+            <td>{{ ingreso.fecha }}</td>
+            <td>
+                {% if ingreso.vehiculo %}
+                    {{ ingreso.vehiculo.modelo.marca.nombre_marca }}
+                    {{ ingreso.vehiculo.modelo.nombre_modelo }}
+                    · {{ ingreso.vehiculo.rango_anios }}
+                {% else %}
+                    <span class="inventory-muted">Sin vehículo informado</span>
+                {% endif %}
+            </td>
+            <td>{{ ingreso.vehiculo.tipo_vehiculo.nombre_tipo|default:"—" }}</td>
+            <td>{{ ingreso.piezas }}</td>
+            <td>{{ ingreso.unidades|default:0 }}</td>
+            <td>{{ ingreso.usuario }}</td>
+            <td class="table-actions">
+                <a href="{% url 'ingreso_detalle' ingreso.pk %}" class="btn" aria-label="Ver detalle del ingreso {{ ingreso.pk }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                        <path d="M14 3v5h5"></path>
+                    </svg>
+                    <span>Detalle</span>
+                </a>
+                {% if puede_editar %}
+                <a href="{% url 'ingreso_editar' ingreso.pk %}" class="btn" aria-label="Editar ingreso {{ ingreso.pk }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 20h9"></path>
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                    </svg>
+                    <span>Editar</span>
+                </a>
+                {% endif %}
+                {% if puede_eliminar %}
+                <a href="{% url 'ingreso_eliminar' ingreso.pk %}" class="btn btn-danger" aria-label="Eliminar ingreso {{ ingreso.pk }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 7h16"></path>
+                        <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
+                        <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+                        <path d="M10 11v6M14 11v6"></path>
+                    </svg>
+                    <span>Eliminar</span>
+                </a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <td colspan="4"><strong>Total de unidades ingresadas</strong></td>
+            <td><strong>{{ total_unidades }}</strong></td>
+            <td colspan="2"></td>
+        </tr>
+    </tfoot>
+</table>
+{% else %}
+<div class="empty-state">
+    <p>Todavía no hay ingresos registrados{% if desde or hasta %} en ese rango de fechas{% endif %}.</p>
+    {% if puede_crear %}
+    <a href="{% url 'ingreso_crear' %}" class="btn btn-primary">Registrar el primer ingreso</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

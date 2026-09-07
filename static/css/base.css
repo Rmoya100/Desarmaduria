@@ -673,6 +673,58 @@ tfoot td {
 }
 
 /* ---------------------------------------------------------------------
+   Secciones dentro de una misma tarjeta de formulario.
+
+   Para formularios largos que antes se partian en varias tarjetas: un solo
+   recuadro con bloques separados por una linea fina. Cada bloque es un
+   <fieldset> con <legend>, de modo que los grupos de checkbox o radio
+   quedan etiquetados para lectores de pantalla.
+--------------------------------------------------------------------- */
+.form-seccion {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    /* Un fieldset trae min-inline-size: min-content y eso impide que sus
+       hijos (una grilla, una tabla) se encojan al achicar la ventana. */
+    min-inline-size: 0;
+}
+
+/* El separador va abajo y no arriba: el <legend> recorta una muesca en el
+   borde SUPERIOR del fieldset, y ahi el hairline se veria partido. */
+.form-seccion:not(:last-child) {
+    margin-bottom: var(--spacing-4);
+    padding-bottom: var(--spacing-4);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.form-seccion__titulo {
+    display: block;
+    width: 100%;
+    margin: 0 0 var(--spacing-3);
+    padding: 0;
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* Numero de paso: guia de lectura del formulario (1 datos, 2 vehiculo...) */
+.form-seccion__paso {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-right: var(--spacing-2);
+    border-radius: 50%;
+    background: var(--color-info-bg);
+    color: var(--color-primary);
+    font-size: 0.68rem;
+    vertical-align: middle;
+}
+
+/* ---------------------------------------------------------------------
    Formulario de Ventas: tarjeta ancha, campos generales en una fila, y la
    barra de agregar producto (buscador + cantidad + precio) que abre el
    modal "Buscar Producto" para elegir de todo el catalogo con su stock.
@@ -1315,6 +1367,19 @@ tfoot td {
 .btn-sm {
     padding: 4px 10px;
     font-size: 0.85rem;
+}
+
+/* Texto solo para lectores de pantalla (leyendas de tablas, etc.). */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .empty-state {

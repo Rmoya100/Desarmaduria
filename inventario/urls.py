@@ -38,6 +38,7 @@ from inventario.views import (
 
 urlpatterns = [
     path('', dashboard, name='dashboard'),
+    path('inventario/ingresos/', include('inventario.ingresos.urls')),
     path('inventario/', include('inventario.visualizaciones.urls')),
     path('ventas/', ventas_lista, name='ventas'),
     path('ventas/nueva/', venta_crear, name='venta_crear'),

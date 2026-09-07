@@ -292,7 +292,8 @@ class SidebarSubmenuTests(TestCase):
         self.assertIn("<summary", html)
         # La clase antigua ya no debe decidir la visibilidad del submenu.
         self.assertNotIn("nav-group--active", html)
-        self.assertEqual(html.count('class="nav-sublink'), 3)
+        # Existencias, Inventario valorizado, Productos e Ingresos.
+        self.assertEqual(html.count('class="nav-sublink'), 4)
         # Debe existir un unico <details>: si un comentario `{# #}` quedara
         # abierto, su texto se emitiria literal y el `<details>` que menciona
         # se parsearia como etiqueta real, dejando el menu dentro de un
