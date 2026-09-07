@@ -9,6 +9,53 @@ from ..models import Producto
 ANIO_MAX = date.today().year + 1
 
 
+class IngresoCabeceraForm(forms.Form):
+    """Datos del vehiculo del que se desarma. Se guarda en Entrada.vehiculo y,
+    si se marca la casilla, se asigna como vehiculo de los productos
+    recibidos que no traigan uno propio en su fila."""
+
+    marca = forms.CharField(
+        label="Marca", required=False, max_length=50,
+        widget=forms.TextInput(attrs={"class": "input-control", "placeholder": "Marca"}),
+    )
+    modelo = forms.CharField(
+        label="Modelo", required=False, max_length=50,
+        widget=forms.TextInput(attrs={"class": "input-control", "placeholder": "Modelo"}),
+    )
+    anio = forms.IntegerField(
+        label="Año", required=False, min_value=1900, max_value=ANIO_MAX,
+        widget=forms.NumberInput(attrs={"class": "input-control", "placeholder": "Año"}),
+    )
+    patente = forms.CharField(
+        label="Patente", required=False, max_length=10,
+        widget=forms.TextInput(attrs={"class": "input-control", "placeholder": "Patente (opcional)"}),
+    )
+    asignar_a_productos = forms.BooleanField(
+        label="Asignar este vehículo a los productos recibidos",
+        required=False,
+        initial=True,
+    )
+
+    CAMPOS_VEHICULO = ("marca", "modelo", "anio")
+
+    def clean(self):
+        datos = super().clean()
+        llenos = [datos.get(c) not in (None, "") for c in self.CAMPOS_VEHICULO]
+        if any(llenos) and not all(llenos):
+            raise forms.ValidationError(
+                "Completa marca, modelo y año del vehículo, o déjalos los tres vacíos."
+            )
+        if datos.get("patente") and not all(llenos):
+            raise forms.ValidationError(
+                "Para registrar la patente indica también marca, modelo y año."
+            )
+        return datos
+
+    @property
+    def tiene_vehiculo(self):
+        return bool(self.cleaned_data.get("marca"))
+
+
 class IngresoLineaForm(forms.Form):
     """Una fila de la pantalla de ingresos: un producto ya existente al que se
     le informa la cantidad recibida y, opcionalmente, se le corrige costo,

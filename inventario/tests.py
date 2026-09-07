@@ -334,10 +334,10 @@ class IngresoTests(TestCase):
         )
         self.prefix = IngresoFormSet().prefix
 
-    def _post(self, lineas):
-        return self.client.post(
-            reverse("ingresos"), datos_formset(self.prefix, lineas)
-        )
+    def _post(self, lineas, **cabecera):
+        data = dict(cabecera)
+        data.update(datos_formset(self.prefix, lineas))
+        return self.client.post(reverse("ingresos"), data)
 
     def test_anonimo_redirige_a_login(self):
         self.client.logout()
@@ -470,6 +470,59 @@ class IngresoTests(TestCase):
                     "anio": "",
                 }
             ]
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Entrada.objects.count(), 0)
+
+    def test_registra_vehiculo_donante_y_lo_asigna_a_los_productos(self):
+        self._post(
+            [{"producto": self.producto.pk, "cantidad": "2"}],
+            marca="Nissan",
+            modelo="V16",
+            anio="2018",
+            patente="ABCD12",
+            asignar_a_productos="on",
+        )
+        entrada = Entrada.objects.get()
+        self.assertIsNotNone(entrada.vehiculo)
+        self.assertEqual(entrada.vehiculo.patente, "ABCD12")
+        self.assertEqual(entrada.vehiculo.modelo.nombre_modelo, "V16")
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.vehiculo, entrada.vehiculo)
+
+    def test_vehiculo_donante_sin_casilla_no_toca_los_productos(self):
+        self._post(
+            [{"producto": self.producto.pk, "cantidad": "2"}],
+            marca="Nissan",
+            modelo="V16",
+            anio="2018",
+        )
+        self.assertIsNotNone(Entrada.objects.get().vehiculo)
+        self.producto.refresh_from_db()
+        self.assertIsNone(self.producto.vehiculo)
+
+    def test_vehiculo_de_fila_gana_al_donante(self):
+        self._post(
+            [
+                {
+                    "producto": self.producto.pk,
+                    "cantidad": "1",
+                    "marca": "Toyota",
+                    "modelo": "Yaris",
+                    "anio": "2020",
+                }
+            ],
+            marca="Nissan",
+            modelo="V16",
+            anio="2018",
+            asignar_a_productos="on",
+        )
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.vehiculo.modelo.nombre_modelo, "Yaris")
+
+    def test_vehiculo_donante_incompleto_es_error(self):
+        response = self._post(
+            [{"producto": self.producto.pk, "cantidad": "2"}], marca="Nissan"
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Entrada.objects.count(), 0)

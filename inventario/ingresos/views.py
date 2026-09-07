@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from ..models import DetalleEntrada, Entrada, Marca, Modelo, Producto, Vehiculo
 from ..permisos import permiso_requerido
-from .forms import IngresoLineaForm
+from .forms import IngresoCabeceraForm, IngresoLineaForm
 
 IngresoFormSet = formset_factory(IngresoLineaForm, extra=0)
 
@@ -35,22 +35,53 @@ def _initial_de(producto):
     return inicial
 
 
-def _asignar_vehiculo(datos):
+def _marca_modelo(datos):
     marca, _ = Marca.objects.get_or_create(nombre_marca=datos["marca"].strip())
     modelo, _ = Modelo.objects.get_or_create(
         marca=marca, nombre_modelo=datos["modelo"].strip()
     )
+    return modelo
+
+
+def _vehiculo_de_fila(datos):
+    modelo = _marca_modelo(datos)
     vehiculo, _ = Vehiculo.objects.get_or_create(modelo=modelo, anio=datos["anio"])
     return vehiculo
 
 
-def _guardar_ingreso(usuario, lineas):
+def _vehiculo_donante(datos):
+    modelo = _marca_modelo(datos)
+    patente = (datos.get("patente") or "").strip() or None
+    if patente:
+        existente = Vehiculo.objects.filter(patente=patente).first()
+        if existente:
+            return existente
+    vehiculo, creado = Vehiculo.objects.get_or_create(
+        modelo=modelo, anio=datos["anio"], defaults={"patente": patente}
+    )
+    if patente and not creado and not vehiculo.patente:
+        vehiculo.patente = patente
+        vehiculo.save(update_fields=["patente"])
+    return vehiculo
+
+
+def _guardar_ingreso(usuario, cabecera, lineas):
     with transaction.atomic():
         # `fecha` es la fecha de negocio del ingreso; se toma del sistema al
         # guardar. `fecha_registro` (auto_now_add) guarda el timestamp exacto.
         entrada = Entrada.objects.create(
             fecha=timezone.localdate(), usuario=usuario
         )
+
+        vehiculo_donante = None
+        if cabecera.get("marca"):
+            vehiculo_donante = _vehiculo_donante(cabecera)
+            entrada.vehiculo = vehiculo_donante
+            entrada.save(update_fields=["vehiculo"])
+        aplicar_donante = bool(
+            vehiculo_donante and cabecera.get("asignar_a_productos")
+        )
+
         for datos in lineas:
             producto = datos["producto"]
             DetalleEntrada.objects.create(
@@ -64,7 +95,10 @@ def _guardar_ingreso(usuario, lineas):
                 producto.precio_venta = datos["precio_venta"]
                 campos.append("precio_venta")
             if datos.get("marca"):
-                producto.vehiculo = _asignar_vehiculo(datos)
+                producto.vehiculo = _vehiculo_de_fila(datos)
+                campos.append("vehiculo")
+            elif aplicar_donante:
+                producto.vehiculo = vehiculo_donante
                 campos.append("vehiculo")
             if campos:
                 producto.save(update_fields=campos)
@@ -76,8 +110,9 @@ def ingreso_crear(request):
     productos = list(_productos_activos())
 
     if request.method == "POST":
+        cabecera = IngresoCabeceraForm(request.POST)
         formset = IngresoFormSet(request.POST)
-        if not formset.is_valid():
+        if not (cabecera.is_valid() and formset.is_valid()):
             messages.error(
                 request,
                 "No se guardó el ingreso: revisa los datos marcados en rojo.",
@@ -93,13 +128,14 @@ def ingreso_crear(request):
                     request, "Ingresa la cantidad recibida de al menos un producto."
                 )
             else:
-                _guardar_ingreso(request.user, lineas)
+                _guardar_ingreso(request.user, cabecera.cleaned_data, lineas)
                 messages.success(
                     request,
                     f"Ingreso registrado: {len(lineas)} producto(s) actualizado(s).",
                 )
                 return redirect("ingresos")
     else:
+        cabecera = IngresoCabeceraForm()
         formset = IngresoFormSet(initial=[_initial_de(p) for p in productos])
 
     productos_por_id = {p.pk: p for p in productos}
@@ -114,5 +150,10 @@ def ingreso_crear(request):
     return render(
         request,
         "inventario/ingresos/ingreso_form.html",
-        {"formset": formset, "filas": filas, "categorias": categorias},
+        {
+            "cabecera": cabecera,
+            "formset": formset,
+            "filas": filas,
+            "categorias": categorias,
+        },
     )
