@@ -490,3 +490,28 @@
     gap: 8px;
 }
 
+/* Modal "Agregar piezas" del editar ingreso */
+.modal-piezas-lista {
+    max-height: 42vh;
+    overflow-y: auto;
+    margin: 10px 0 4px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+
+.modal-pieza {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    font-size: 0.88rem;
+}
+
+.modal-pieza:last-of-type { border-bottom: 0; }
+.modal-pieza:hover { background: var(--color-info-bg, #eef4fb); }
+.modal-pieza input { width: auto; flex: 0 0 auto; }
+.modal-pieza--agregada { display: none; }
+.modal-piezas-lista .empty-state { border: 0; }
+

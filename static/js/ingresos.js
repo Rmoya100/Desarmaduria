@@ -192,6 +192,90 @@
         });
     });
 
+    // --- Modal "Agregar piezas" (solo en edicion) -------------------------
+    var modal = document.querySelector("[data-modal-agregar]");
+    if (modal) {
+        var abrirModalBtn = formulario.querySelector("[data-abrir-agregar]");
+        var selectCategoria = modal.querySelector("[data-modal-cat]");
+        var buscadorModal = modal.querySelector("[data-modal-buscar]");
+        var itemsModal = Array.prototype.slice.call(
+            modal.querySelectorAll("[data-modal-pieza]")
+        );
+        var avisoModalVacio = modal.querySelector("[data-modal-vacio]");
+
+        var filtrarModal = function () {
+            var cat = selectCategoria.value;
+            var termino = normalizar(buscadorModal.value);
+            var visibles = 0;
+            itemsModal.forEach(function (item) {
+                if (item.classList.contains("modal-pieza--agregada")) {
+                    item.hidden = true;
+                    return;
+                }
+                var ok =
+                    (!cat || item.getAttribute("data-cat") === cat) &&
+                    (!termino ||
+                        normalizar(item.getAttribute("data-nombre")).indexOf(termino) !== -1);
+                item.hidden = !ok;
+                if (ok) visibles += 1;
+            });
+            if (avisoModalVacio) avisoModalVacio.hidden = visibles > 0;
+        };
+
+        var abrirModal = function () {
+            modal.classList.add("inventory-modal--open");
+            modal.setAttribute("aria-hidden", "false");
+            filtrarModal();
+            buscadorModal.focus();
+        };
+        var cerrarModal = function () {
+            modal.classList.remove("inventory-modal--open");
+            modal.setAttribute("aria-hidden", "true");
+        };
+
+        if (abrirModalBtn) abrirModalBtn.addEventListener("click", abrirModal);
+        modal.addEventListener("click", function (evento) {
+            if (evento.target === modal || evento.target.closest("[data-cerrar-agregar]")) {
+                cerrarModal();
+            }
+        });
+        selectCategoria.addEventListener("change", filtrarModal);
+        buscadorModal.addEventListener("input", filtrarModal);
+        buscadorModal.addEventListener("keydown", function (evento) {
+            if (evento.key === "Enter") evento.preventDefault();
+        });
+        document.addEventListener("keydown", function (evento) {
+            if (evento.key === "Escape") cerrarModal();
+        });
+
+        modal.querySelector("[data-confirmar-agregar]").addEventListener("click", function () {
+            var marcados = Array.prototype.slice.call(
+                modal.querySelectorAll("[data-agregar-pieza]:checked")
+            );
+            var primerInput = null;
+            marcados.forEach(function (chk) {
+                var input = formulario.querySelector(
+                    '[name="cantidad_' + chk.value + '"]'
+                );
+                if (input) {
+                    input.value = "1";
+                    if (!primerInput) primerInput = input;
+                }
+                chk.checked = false;
+                var item = chk.closest("[data-modal-pieza]");
+                if (item) item.classList.add("modal-pieza--agregada");
+            });
+            cerrarModal();
+            aplicarFiltros();
+            actualizarResumen();
+            if (primerInput) {
+                primerInput.scrollIntoView({ block: "center", behavior: "smooth" });
+                primerInput.focus();
+                primerInput.select();
+            }
+        });
+    }
+
     aplicarFiltros();
     actualizarResumen();
 })();

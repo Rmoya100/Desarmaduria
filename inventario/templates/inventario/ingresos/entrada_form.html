@@ -95,15 +95,17 @@
             <legend class="form-seccion__titulo">
                 <span class="form-seccion__paso" aria-hidden="true">3</span>{% if es_edicion %}Agregar más piezas{% else %}Categorías a ingresar{% endif %}
             </legend>
+            {% if es_edicion %}
             <p class="ingreso-ayuda">
-                {% if es_edicion %}
-                Abajo están las piezas que ya tiene este ingreso. Para agregar
-                una que faltó, elige su categoría y anota la cantidad.
-                {% else %}
+                Abajo están las piezas que ya tiene este ingreso. ¿Faltó alguna?
+                Agrégala desde acá.
+            </p>
+            <button type="button" class="btn btn-primary" data-abrir-agregar>+ Agregar piezas</button>
+            {% else %}
+            <p class="ingreso-ayuda">
                 Elige una categoría, anota las cantidades de las piezas que
                 recibiste y pasa a la siguiente. Las piezas con cantidad quedan
                 a la vista aunque cambies de categoría.
-                {% endif %}
             </p>
             <div class="ingreso-chips">
                 {% for grupo in grupos %}
@@ -125,6 +127,7 @@
                 </label>
                 {% endfor %}
             </div>
+            {% endif %}
         </fieldset>
         {% endif %}
     </div>
@@ -209,6 +212,36 @@
             (sin vehículo asignado) desde el módulo de Productos.
         </p>
         <a href="{% url 'productos_lista' %}" class="btn btn-primary">Ir a Productos</a>
+    </div>
+    {% endif %}
+
+    {% if es_edicion and grupos %}
+    <div class="inventory-modal" id="modal-agregar-piezas" data-modal-agregar aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="modal-agregar-titulo">
+        <div class="inventory-modal__dialog">
+            <button type="button" class="inventory-modal__close" data-cerrar-agregar aria-label="Cerrar">&times;</button>
+            <h2 id="modal-agregar-titulo">Agregar piezas al ingreso</h2>
+            <p class="inventory-muted">Marca las que faltaron. Se agregan con cantidad 1 y la ajustás en la tabla.</p>
+            <label for="modal-cat-piezas">Categoría</label>
+            <select id="modal-cat-piezas" class="input-control" data-modal-cat>
+                <option value="">Todas las categorías</option>
+                {% for grupo in grupos %}<option value="{{ grupo.categoria.pk }}">{{ grupo.categoria.nombre_categoria }}</option>{% endfor %}
+            </select>
+            <label for="modal-buscar-piezas">Buscar pieza</label>
+            <input type="search" id="modal-buscar-piezas" class="input-control" placeholder="Nombre de la pieza" data-modal-buscar autocomplete="off">
+            <div class="inventory-modal__body modal-piezas-lista" data-modal-lista>
+                {% for grupo in grupos %}{% for fila in grupo.piezas %}{% if not fila.cantidad %}
+                <label class="modal-pieza" data-modal-pieza data-cat="{{ grupo.categoria.pk }}" data-nombre="{{ fila.pieza.nombre }}">
+                    <input type="checkbox" value="{{ fila.pieza.pk }}" data-agregar-pieza>
+                    <span>{{ fila.pieza.nombre }} <small class="inventory-muted">{{ grupo.categoria.nombre_categoria }}</small></span>
+                </label>
+                {% endif %}{% endfor %}{% endfor %}
+                <p class="empty-state" data-modal-vacio hidden>Ninguna pieza coincide.</p>
+            </div>
+            <div class="inventory-modal__actions">
+                <button type="button" class="btn" data-cerrar-agregar>Cancelar</button>
+                <button type="button" class="btn btn-primary" data-confirmar-agregar>Agregar seleccionadas</button>
+            </div>
+        </div>
     </div>
     {% endif %}
 </form>
