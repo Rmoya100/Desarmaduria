@@ -89,8 +89,12 @@
             var coincidencias = 0;
 
             filasGrupo.forEach(function (fila) {
+                // Se ve si es de la categoria activa O si ya tiene una
+                // cantidad anotada: asi lo cargado no desaparece al cambiar
+                // de categoria y lo que quedo en cero se oculta.
+                var vigente = activo || cantidadDe(fila) > 0;
                 var coincide =
-                    activo &&
+                    vigente &&
                     (!termino ||
                         normalizar(fila.getAttribute("data-nombre")).indexOf(termino) !==
                             -1);
@@ -123,37 +127,17 @@
             });
     }
 
-    function tieneCantidades(grupo) {
-        return Array.prototype.slice
-            .call(grupo.querySelectorAll("[data-pieza]"))
-            .some(function (fila) {
-                return cantidadDe(fila) > 0;
-            });
-    }
-
-    function grupoDe(valor) {
-        for (var i = 0; i < grupos.length; i += 1) {
-            if (grupos[i].getAttribute("data-grupo") === valor) {
-                return grupos[i];
-            }
-        }
-        return null;
-    }
-
+    // Se navega de a una categoria: marcar una desmarca las demas. Lo que ya
+    // tenga cantidad sigue a la vista aunque su categoria quede sin marcar
+    // (ver aplicarFiltros), asi que no hace falta preguntar antes de cambiar.
     categorias.forEach(function (checkbox) {
         checkbox.addEventListener("change", function () {
-            var grupo = grupoDe(checkbox.value);
-            if (grupo && !checkbox.checked && tieneCantidades(grupo)) {
-                // Un input oculto seguiria enviandose: o se limpia o la
-                // categoria se vuelve a marcar. Se pregunta antes de borrar.
-                var confirmado = window.confirm(
-                    "Esa categoría tiene cantidades anotadas. ¿Quitarlas del ingreso?"
-                );
-                if (!confirmado) {
-                    checkbox.checked = true;
-                    return;
-                }
-                limpiarGrupo(grupo);
+            if (checkbox.checked) {
+                categorias.forEach(function (otro) {
+                    if (otro !== checkbox) {
+                        otro.checked = false;
+                    }
+                });
             }
             aplicarFiltros();
             actualizarResumen();
@@ -181,6 +165,15 @@
     panel.addEventListener("input", function (evento) {
         if (evento.target.matches("[data-cantidad]")) {
             actualizarResumen();
+        }
+    });
+
+    // Al confirmar la cantidad (blur / Enter): si quedo en cero y su categoria
+    // no esta activa, la fila se oculta; si quedo > 0 se mantiene aunque
+    // cambies de categoria.
+    panel.addEventListener("change", function (evento) {
+        if (evento.target.matches("[data-cantidad]")) {
+            aplicarFiltros();
         }
     });
 

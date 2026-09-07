@@ -96,8 +96,9 @@
                 <span class="form-seccion__paso" aria-hidden="true">3</span>Categorías a ingresar
             </legend>
             <p class="ingreso-ayuda">
-                Marca una o más categorías para desplegar sus piezas. Puedes combinar
-                todas las que salieron del mismo vehículo.
+                Elige una categoría, anota las cantidades de las piezas que
+                recibiste y pasa a la siguiente. Las piezas con cantidad quedan
+                a la vista aunque cambies de categoría.
             </p>
             <div class="ingreso-chips">
                 {% for grupo in grupos %}
@@ -143,7 +144,7 @@
         </div>
 
         <p class="empty-state" data-sin-categorias hidden>
-            Selecciona al menos una categoría para ver sus piezas.
+            Elige una categoría arriba para ver sus piezas.
         </p>
         <p class="empty-state" data-sin-resultados hidden>
             Ninguna pieza coincide con la búsqueda.
