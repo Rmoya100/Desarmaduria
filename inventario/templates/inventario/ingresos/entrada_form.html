@@ -93,12 +93,17 @@
         {% if grupos %}
         <fieldset class="form-seccion">
             <legend class="form-seccion__titulo">
-                <span class="form-seccion__paso" aria-hidden="true">3</span>Categorías a ingresar
+                <span class="form-seccion__paso" aria-hidden="true">3</span>{% if es_edicion %}Agregar más piezas{% else %}Categorías a ingresar{% endif %}
             </legend>
             <p class="ingreso-ayuda">
+                {% if es_edicion %}
+                Abajo están las piezas que ya tiene este ingreso. Para agregar
+                una que faltó, elige su categoría y anota la cantidad.
+                {% else %}
                 Elige una categoría, anota las cantidades de las piezas que
                 recibiste y pasa a la siguiente. Las piezas con cantidad quedan
                 a la vista aunque cambies de categoría.
+                {% endif %}
             </p>
             <div class="ingreso-chips">
                 {% for grupo in grupos %}
@@ -128,10 +133,10 @@
     <div class="table-panel" data-piezas>
         <div class="table-panel__header">
             <div>
-                <h2><span class="form-seccion__paso" aria-hidden="true">4</span>Piezas y cantidades</h2>
+                <h2><span class="form-seccion__paso" aria-hidden="true">4</span>{% if es_edicion %}Piezas de este ingreso{% else %}Piezas y cantidades{% endif %}</h2>
                 <span>
                     Indica cuántas unidades quedan en condiciones de venderse. Si de
-                    dos puertas solo una sirve, ingresa 1.
+                    dos puertas solo una sirve, ingresa 1. Poner 0 quita la pieza del ingreso.
                 </span>
             </div>
             <div class="ingreso-piezas__acciones">
@@ -144,7 +149,7 @@
         </div>
 
         <p class="empty-state" data-sin-categorias hidden>
-            Elige una categoría arriba para ver sus piezas.
+            {% if es_edicion %}Este ingreso todavía no tiene piezas. Elige una categoría arriba para agregarlas.{% else %}Elige una categoría arriba para ver sus piezas.{% endif %}
         </p>
         <p class="empty-state" data-sin-resultados hidden>
             Ninguna pieza coincide con la búsqueda.

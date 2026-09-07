@@ -1,10 +1,15 @@
 {% extends "base.html" %}
+{% load static %}
 
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
 {% block title %}Ingreso #{{ entrada.pk }} · Desarmaduría{% endblock %}
 
 {% block content %}
 <div class="page-header page-header--actions">
-    <h1>Ingreso #{{ entrada.pk }}</h1>
+    <div>
+        <p class="eyebrow">Ingreso de inventario</p>
+        <h1>Ingreso #{{ entrada.pk }}</h1>
+    </div>
     <div class="page-header__actions">
         {% if puede_editar %}
         <a href="{% url 'ingreso_editar' entrada.pk %}" class="btn">Editar</a>
@@ -16,65 +21,58 @@
     </div>
 </div>
 
-<div class="form-card">
-    <dl class="ingreso-ficha">
-        <div>
-            <dt>Fecha</dt>
-            <dd>{{ entrada.fecha }}</dd>
-        </div>
-        <div>
-            <dt>Vehículo</dt>
-            <dd>
-                {% if entrada.vehiculo %}
-                    {{ entrada.vehiculo.modelo.marca.nombre_marca }}
-                    {{ entrada.vehiculo.modelo.nombre_modelo }}
-                {% else %}
-                    <span class="inventory-muted">Sin vehículo informado</span>
-                {% endif %}
-            </dd>
-        </div>
-        <div>
-            <dt>Tipo</dt>
-            <dd>{{ entrada.vehiculo.tipo_vehiculo.nombre_tipo|default:"—" }}</dd>
-        </div>
-        <div>
-            <dt>Años</dt>
-            <dd>{{ entrada.vehiculo.rango_anios|default:"—" }}</dd>
-        </div>
-        <div>
-            <dt>Registrado por</dt>
-            <dd>{{ entrada.usuario }}</dd>
-        </div>
-        <div>
-            <dt>Unidades ingresadas</dt>
-            <dd><strong>{{ total_unidades }}</strong></dd>
-        </div>
+<section class="ingreso-resumen-card">
+    <div class="ingreso-resumen-card__vehiculo">
+        <span class="eyebrow">Vehículo desarmado</span>
+        {% if entrada.vehiculo %}
+        <strong>{{ entrada.vehiculo.modelo.marca.nombre_marca }} {{ entrada.vehiculo.modelo.nombre_modelo }}</strong>
+        <span>
+            {% if entrada.vehiculo.tipo_vehiculo %}{{ entrada.vehiculo.tipo_vehiculo.nombre_tipo }} · {% endif %}
+            {{ entrada.vehiculo.rango_anios }}
+            {% if entrada.vehiculo.patente %} · {{ entrada.vehiculo.patente }}{% endif %}
+        </span>
+        {% else %}
+        <strong class="inventory-muted">Sin vehículo informado</strong>
+        {% endif %}
+    </div>
+    <dl class="ingreso-stats">
+        <div><dt>Fecha</dt><dd>{{ entrada.fecha }}</dd></div>
+        <div><dt>Registrado por</dt><dd>{{ entrada.usuario }}</dd></div>
+        <div><dt>Piezas distintas</dt><dd>{{ detalles|length }}</dd></div>
+        <div><dt>Unidades ingresadas</dt><dd class="ingreso-stats__destacado">{{ total_unidades }}</dd></div>
     </dl>
-</div>
+</section>
 
 {% if detalles %}
-<div class="table-scroll">
-    <table class="data-table">
-        <caption class="visually-hidden">Piezas ingresadas</caption>
-        <thead>
-            <tr>
-                <th scope="col">Categoría</th>
-                <th scope="col">Pieza</th>
-                <th scope="col">Cantidad</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for detalle in detalles %}
-            <tr>
-                <td>{{ detalle.producto.categoria.nombre_categoria }}</td>
-                <td>{{ detalle.producto.nombre }}</td>
-                <td><span class="stock-badge">{{ detalle.cantidad }}</span></td>
-            </tr>
+<div class="table-panel" style="margin-top:18px;">
+    <div class="table-panel__header">
+        <div><h2>Piezas ingresadas</h2></div>
+    </div>
+    <div class="table-scroll">
+        <table class="data-table">
+            <caption class="visually-hidden">Piezas ingresadas, agrupadas por categoría</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Pieza</th>
+                    <th scope="col" class="ingreso-tabla__cantidad">Cantidad</th>
+                </tr>
+            </thead>
+            {% regroup detalles by producto.categoria.nombre_categoria as grupos %}
+            {% for grupo in grupos %}
+            <tbody>
+                <tr class="ingreso-grupo"><th scope="rowgroup" colspan="2">{{ grupo.grouper }}</th></tr>
+                {% for detalle in grupo.list %}
+                <tr>
+                    <td>{{ detalle.producto.nombre }}</td>
+                    <td class="ingreso-tabla__cantidad"><span class="stock-badge">{{ detalle.cantidad }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
             {% endfor %}
-        </tbody>
-    </table>
+        </table>
+    </div>
 </div>
 {% else %}
-<div class="empty-state">Este ingreso no tiene piezas registradas.</div>
+<div class="empty-state" style="margin-top:18px;">Este ingreso no tiene piezas registradas.</div>
 {% endif %}
 {% endblock %}

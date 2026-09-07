@@ -149,13 +149,19 @@ def _procesar_formulario(request, entrada, titulo, mensaje_exito):
         form_categorias = CategoriasIngresoForm()
         form_lineas = None
         cantidades = cantidades_por_pieza(entrada) if entrada.pk else {}
-        seleccionadas = {
-            pieza.categoria_id for pieza in piezas if cantidades.get(pieza.pk)
-        }
+        if entrada.pk:
+            # Al editar no se pre-marca ninguna categoria: se ven solo las
+            # piezas ya cargadas y el resto se agrega desde el modal.
+            seleccionadas = set()
+        else:
+            seleccionadas = {
+                pieza.categoria_id for pieza in piezas if cantidades.get(pieza.pk)
+            }
 
     contexto = {
         "titulo": titulo,
         "entrada": entrada if entrada.pk else None,
+        "es_edicion": bool(entrada.pk),
         "form": form,
         "form_vehiculo": form_vehiculo,
         "form_lineas": form_lineas,

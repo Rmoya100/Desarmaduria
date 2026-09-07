@@ -109,10 +109,13 @@
         });
 
         if (avisoCategorias) {
-            avisoCategorias.hidden = hayCategorias;
+            // Al editar puede haber piezas visibles sin categoria marcada
+            // (las que ya trae el ingreso): en ese caso no se muestra el
+            // aviso de "elige una categoria".
+            avisoCategorias.hidden = hayCategorias || visibles > 0;
         }
         if (avisoResultados) {
-            avisoResultados.hidden = !hayCategorias || visibles > 0;
+            avisoResultados.hidden = (!hayCategorias && !termino) || visibles > 0;
         }
         if (tabla) {
             tabla.hidden = visibles === 0;
