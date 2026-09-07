@@ -1,8 +1,19 @@
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 
 from django import forms
 
 from ..models import Producto
+
+DOS_DECIMALES = Decimal("0.01")
+
+
+def _a_dos_decimales(valor):
+    """Redondea a 2 decimales (lo que guarda el modelo) en vez de rechazar un
+    numero con mas decimales."""
+    if valor is None:
+        return None
+    return valor.quantize(DOS_DECIMALES, rounding=ROUND_HALF_UP)
 
 # Vehiculo.anio es PositiveSmallIntegerField; no tiene sentido aceptar años
 # futuros mas alla del proximo (modelos que se adelantan).
@@ -56,19 +67,19 @@ class IngresoLineaForm(forms.Form):
     costo = forms.DecimalField(
         required=False,
         min_value=0,
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=4,
         widget=forms.NumberInput(
-            attrs={"class": "input-control", "min": "0", "step": "0.01"}
+            attrs={"class": "input-control", "min": "0", "step": "any"}
         ),
     )
     precio_venta = forms.DecimalField(
         required=False,
         min_value=0,
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=4,
         widget=forms.NumberInput(
-            attrs={"class": "input-control", "min": "0", "step": "0.01"}
+            attrs={"class": "input-control", "min": "0", "step": "any"}
         ),
     )
 
@@ -84,6 +95,12 @@ class IngresoLineaForm(forms.Form):
             actual = self.initial.pop(campo, None)
             if actual not in (None, ""):
                 self.fields[campo].widget.attrs["placeholder"] = str(actual)
+
+    def clean_costo(self):
+        return _a_dos_decimales(self.cleaned_data.get("costo"))
+
+    def clean_precio_venta(self):
+        return _a_dos_decimales(self.cleaned_data.get("precio_venta"))
 
     def clean(self):
         datos = super().clean()

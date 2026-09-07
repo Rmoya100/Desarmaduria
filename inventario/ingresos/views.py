@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.db import transaction
-from django.forms import formset_factory
+from django.forms import BaseFormSet, formset_factory
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
@@ -8,7 +8,21 @@ from ..models import DetalleEntrada, Entrada, Marca, Modelo, Producto, Vehiculo
 from ..permisos import permiso_requerido, tiene_permiso
 from .forms import IngresoCabeceraForm, IngresoLineaForm
 
-IngresoFormSet = formset_factory(IngresoLineaForm, extra=0)
+
+class _IngresoBaseFormSet(BaseFormSet):
+    """La tabla trae una fila por producto activo, pero el navegador solo
+    envia las filas con cantidad (deshabilita el resto). Sin esto el formset
+    exige que TODAS las filas —incluidas las vacias que nunca llegan— sean
+    validas y el guardado falla sin mostrar ningun campo en rojo."""
+
+    def add_fields(self, form, index):
+        super().add_fields(form, index)
+        form.empty_permitted = True
+
+
+IngresoFormSet = formset_factory(
+    IngresoLineaForm, formset=_IngresoBaseFormSet, extra=0
+)
 
 
 def _productos_activos():
