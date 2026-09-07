@@ -1,0 +1,112 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprobante de venta #{{ venta.pk }} · Desarmaduría</title>
+    <link rel="icon" href="{% static 'imagen/logo.webp' %}">
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+</head>
+<body class="comprobante-body">
+    <div class="comprobante">
+        <div class="comprobante__toolbar">
+            <a href="{% url 'ventas' %}" class="btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M15 18l-6-6 6-6"></path>
+                </svg>
+                <span>Volver</span>
+            </a>
+            <div class="comprobante__toolbar-actions">
+                <button type="button" class="btn" id="btnImprimir">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 9V3h12v6"></path>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <rect x="6" y="14" width="12" height="7"></rect>
+                    </svg>
+                    <span>Imprimir</span>
+                </button>
+                <a href="{% url 'venta_comprobante_pdf' venta.pk %}" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 3v12"></path>
+                        <path d="M7 10l5 5 5-5"></path>
+                        <path d="M5 21h14"></path>
+                    </svg>
+                    <span>Guardar PDF</span>
+                </a>
+            </div>
+        </div>
+
+        <article class="comprobante__sheet">
+            <header class="comprobante__brand">
+                <img src="{% static 'imagen/logo.webp' %}" alt="Logo Desarmaduría" class="comprobante__logo">
+                <div>
+                    <strong>Desarmaduría</strong>
+                    <span>Sistema de gestión de ventas</span>
+                </div>
+            </header>
+
+            <div class="comprobante__banner">
+                <div>
+                    <span class="comprobante__eyebrow">Control de ventas</span>
+                    <h1>Documento de venta</h1>
+                </div>
+                <div class="comprobante__banner-meta">
+                    <span class="comprobante__badge">#{{ venta.pk }}</span>
+                    <span>Generado el {% now "d-m-Y H:i" %} hrs</span>
+                </div>
+            </div>
+
+            <div class="comprobante__meta">
+                <div class="comprobante__meta-item">
+                    <span>Fecha</span>
+                    <strong>{{ venta.fecha_venta }}</strong>
+                </div>
+                <div class="comprobante__meta-item">
+                    <span>Tipo Doc.</span>
+                    <strong>{{ venta.tipo_documento }}</strong>
+                </div>
+                <div class="comprobante__meta-item">
+                    <span>Forma de pago</span>
+                    <strong>{{ venta.forma_pago }}</strong>
+                </div>
+                <div class="comprobante__meta-item">
+                    <span>Usuario</span>
+                    <strong>{{ venta.usuario }}</strong>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fila in filas %}
+                    <tr>
+                        <td>{{ fila.detalle.producto }}</td>
+                        <td>{{ fila.detalle.cantidad }}</td>
+                        <td>${{ fila.detalle.precio }}</td>
+                        <td>${{ fila.subtotal }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3"><strong>Total</strong></td>
+                        <td><strong>${{ total }}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </article>
+    </div>
+
+    <script>
+        document.getElementById("btnImprimir").addEventListener("click", () => window.print());
+    </script>
+</body>
+</html>

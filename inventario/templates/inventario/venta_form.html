@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
+{% block title %}{{ titulo }} · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <span class="titulo-icono" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="9" cy="21" r="1"></circle>
+                <circle cx="19" cy="21" r="1"></circle>
+                <path d="M2.5 3h2l2.6 12.4a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L21 8H6"></path>
+            </svg>
+        </span>
+        {{ titulo }}
+    </h1>
+</div>
+
+{{ productos_json|json_script:"productos-disponibles" }}
+<span id="umbral-bajo-stock" hidden>{{ umbral_bajo_stock }}</span>
+
+<div class="form-card form-card--ancho venta-card">
+    <form method="post" class="form">
+        {% csrf_token %}
+        <div class="form-row">
+            {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                <p class="form-error">{{ field.errors|join:", " }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <h2 class="venta-card__subtitulo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 4h11"></path>
+                <path d="M9 12h11"></path>
+                <path d="M9 20h11"></path>
+                <path d="M4.5 4.5l.7.7 1.3-1.4"></path>
+                <path d="M4.5 12.5l.7.7 1.3-1.4"></path>
+                <path d="M4.5 20.5l.7.7 1.3-1.4"></path>
+            </svg>
+            Detalle de la venta
+        </h2>
+
+        {{ formset.management_form }}
+        {% if formset.non_form_errors %}
+        <p class="form-error">{{ formset.non_form_errors|join:", " }}</p>
+        {% endif %}
+
+        <div class="detalle-toolbar">
+            <div class="detalle-toolbar__buscador">
+                <svg class="detalle-toolbar__icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <path d="M21 21l-4.3-4.3"></path>
+                </svg>
+                <input
+                    type="text"
+                    id="buscador-producto-nuevo"
+                    class="detalle-toolbar__input"
+                    placeholder="Seleccionar producto…"
+                    readonly
+                    data-modal-open="modal-buscar-producto"
+                >
+            </div>
+            <input
+                type="number"
+                id="cantidad-nueva-linea"
+                class="detalle-toolbar__input detalle-toolbar__input--corta"
+                placeholder="Cantidad"
+                min="1"
+                step="1"
+            >
+            <input
+                type="number"
+                id="precio-nueva-linea"
+                class="detalle-toolbar__input detalle-toolbar__input--corta"
+                placeholder="Precio"
+                min="0"
+                step="0.01"
+            >
+            <button type="button" class="btn detalle-toolbar__agregar" data-agregar-linea>+ Agregar</button>
+        </div>
+        <p class="form-error" id="error-nueva-linea" hidden></p>
+
+        <table class="detalle-ventas" data-formset data-formset-prefix="{{ formset.prefix }}">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Precio</th>
+                    <th>Subtotal</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody data-formset-body>
+                {% for detalle_form in formset %}
+                <tr class="formset-row">
+                    {{ detalle_form.id }}
+                    {{ detalle_form.producto }}
+                    {{ detalle_form.cantidad }}
+                    {{ detalle_form.precio }}
+                    <td class="detalle-producto-nombre">{{ detalle_form.instance.producto.nombre|default:"" }}</td>
+                    <td class="detalle-cantidad-valor">{{ detalle_form.instance.cantidad|default:"" }}</td>
+                    <td class="detalle-precio-valor">{% if detalle_form.instance.pk %}${{ detalle_form.instance.precio }}{% endif %}</td>
+                    <td class="detalle-subtotal"></td>
+                    <td>
+                        <span hidden>{{ detalle_form.DELETE }}</span>
+                        <button type="button" class="btn btn-danger btn-sm" data-formset-remove>Quitar</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr id="detalle-vacio"{% if formset.forms %} hidden{% endif %}>
+                    <td colspan="5" class="empty-state">Busca, selecciona y agrega los productos de la venta.</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <template data-formset-empty>
+            <tr class="formset-row">
+                {{ formset.empty_form.id }}
+                {{ formset.empty_form.producto }}
+                {{ formset.empty_form.cantidad }}
+                {{ formset.empty_form.precio }}
+                <td class="detalle-producto-nombre"></td>
+                <td class="detalle-cantidad-valor"></td>
+                <td class="detalle-precio-valor"></td>
+                <td class="detalle-subtotal"></td>
+                <td>
+                    <span hidden>{{ formset.empty_form.DELETE }}</span>
+                    <button type="button" class="btn btn-danger btn-sm" data-formset-remove>Quitar</button>
+                </td>
+            </tr>
+        </template>
+
+        <div class="form-actions form-actions--fin">
+            <a href="{% url 'ventas' %}" class="btn">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Guardar venta</button>
+        </div>
+    </form>
+</div>
+
+<div class="inventory-modal" id="modal-buscar-producto" aria-hidden="true">
+    <div class="inventory-modal__dialog inventory-modal__dialog--producto">
+        <div class="modal-producto__header">
+            <h2>Buscar Producto</h2>
+            <a href="#" class="inventory-modal__close" data-modal-close aria-label="Cerrar">&times;</a>
+        </div>
+        <input
+            type="search"
+            id="buscador-producto-modal"
+            class="input-control"
+            placeholder="Buscar por nombre"
+            autocomplete="off"
+        >
+        <div class="modal-producto__tabla-wrap">
+            <table class="modal-producto__tabla">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th class="modal-producto__col-stock">Stock (global)</th>
+                    </tr>
+                </thead>
+                <tbody id="lista-productos-modal"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/inventario.js' %}"></script>{% endblock %}

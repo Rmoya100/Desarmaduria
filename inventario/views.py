@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import DecimalField, ExpressionWrapper, F, ProtectedError, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -15,11 +16,13 @@ from openpyxl.styles import Font
 
 from .forms import (
     ConceptoGastoForm,
+    DetalleVentaFormSet,
     FormaPagoForm,
     GastoForm,
     RolForm,
     TipoDocumentoForm,
     UsuarioForm,
+    VentaForm,
 )
 from .models import (
     ConceptoGasto,
@@ -32,9 +35,9 @@ from .models import (
     Vehiculo,
     Venta,
 )
-from .pdf import gasto_comprobante_pdf_bytes, gastos_pdf_bytes
+from .pdf import gasto_comprobante_pdf_bytes, gastos_pdf_bytes, venta_comprobante_pdf_bytes, ventas_pdf_bytes
 from .permisos import permiso_requerido, tiene_permiso
-from .reportes.queries import reporte_utilidad, restar_meses
+from .reportes.queries import reporte_utilidad, restar_meses, ventas_anotadas
 from .servicios.inventario import productos_con_stock, valor_inventario
 
 # Bajo este umbral (entradas - ventas) un producto se marca "bajo stock" en el
@@ -473,3 +476,196 @@ class ConceptoGastoDeleteView(LoginRequiredMixin, DeleteView):
             return self.get(self.request, *self.args, **self.kwargs)
         messages.success(self.request, "Concepto eliminado correctamente.")
         return response
+
+
+# ---------------------------------------------------------------------------
+# Ventas
+# ---------------------------------------------------------------------------
+def ventas_filtradas(request):
+    """Ventas ordenadas por fecha y filtradas por desde/hasta= si vienen en
+    la URL, igual que gastos_filtrados. Sin filtro por defecto: a diferencia
+    del reporte de Reportes/Ventas (que siempre acota a un rango), aca se
+    quiere ver el listado completo salvo que el usuario filtre."""
+    queryset = ventas_anotadas()
+    desde = request.GET.get("desde")
+    hasta = request.GET.get("hasta")
+    if desde:
+        queryset = queryset.filter(fecha_venta__gte=desde)
+    if hasta:
+        queryset = queryset.filter(fecha_venta__lte=hasta)
+    return queryset
+
+
+@permiso_requerido("ventas", "ver")
+def ventas_lista(request):
+    ventas = ventas_filtradas(request).prefetch_related("detalles")
+    contexto = {
+        "ventas": ventas,
+        "total": ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0"),
+        "desde": request.GET.get("desde", ""),
+        "hasta": request.GET.get("hasta", ""),
+        "puede_crear": tiene_permiso(request.user, "ventas", "crear"),
+        "puede_editar": tiene_permiso(request.user, "ventas", "editar"),
+        "puede_eliminar": tiene_permiso(request.user, "ventas", "eliminar"),
+    }
+    return render(request, "inventario/venta_list.html", contexto)
+
+
+def _venta_form_y_formset(request, venta):
+    if request.method == "POST":
+        form = VentaForm(request.POST, instance=venta)
+        formset = DetalleVentaFormSet(request.POST, instance=venta)
+    else:
+        form = VentaForm(instance=venta)
+        formset = DetalleVentaFormSet(instance=venta)
+    return form, formset
+
+
+def _productos_json():
+    """Catalogo para el modal "Buscar Producto" del formulario de ventas
+    (inventario.js lo lee via json_script), con el stock disponible de cada
+    uno para mostrarlo en la tabla. Reusa productos_con_stock() (el mismo
+    calculo que usa el dashboard) en vez de duplicar la logica de stock.
+    Se recalcula en cada request: son pocas filas y asi nunca queda
+    desactualizado tras crear/eliminar un producto o registrar una venta."""
+    return list(
+        productos_con_stock().values("id_producto", "nombre", "stock_disponible")
+    )
+
+
+@permiso_requerido("ventas", "crear")
+def venta_crear(request):
+    form, formset = _venta_form_y_formset(request, Venta())
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        with transaction.atomic():
+            venta = form.save(commit=False)
+            venta.usuario = request.user
+            venta.save()
+            formset.instance = venta
+            formset.save()
+        return redirect("venta_guardada")
+    contexto = {
+        "form": form,
+        "formset": formset,
+        "titulo": "Nueva venta",
+        "productos_json": _productos_json(),
+        "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+    }
+    return render(request, "inventario/venta_form.html", contexto)
+
+
+@permiso_requerido("ventas", "crear")
+def venta_guardada(request):
+    return render(request, "inventario/venta_guardada.html")
+
+
+@permiso_requerido("ventas", "editar")
+def venta_editar(request, pk):
+    venta = get_object_or_404(Venta, pk=pk)
+    form, formset = _venta_form_y_formset(request, venta)
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        with transaction.atomic():
+            form.save()
+            formset.save()
+        messages.success(request, "Venta actualizada correctamente.")
+        return redirect("ventas")
+    contexto = {
+        "form": form,
+        "formset": formset,
+        "titulo": "Editar venta",
+        "productos_json": _productos_json(),
+        "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+    }
+    return render(request, "inventario/venta_form.html", contexto)
+
+
+@permiso_requerido("ventas", "eliminar")
+def venta_eliminar(request, pk):
+    venta = get_object_or_404(Venta, pk=pk)
+    if request.method == "POST":
+        venta.delete()
+        messages.success(request, "Venta eliminada correctamente.")
+        return redirect("ventas")
+    return render(request, "inventario/venta_confirm_delete.html", {"venta": venta})
+
+
+@permiso_requerido("ventas", "ver")
+def venta_comprobante(request, pk):
+    venta = get_object_or_404(
+        Venta.objects.select_related("tipo_documento", "forma_pago", "usuario"), pk=pk
+    )
+    filas = [
+        {"detalle": detalle, "subtotal": detalle.cantidad * detalle.precio}
+        for detalle in venta.detalles.select_related("producto")
+    ]
+    total = sum((fila["subtotal"] for fila in filas), Decimal("0"))
+    return render(
+        request,
+        "inventario/venta_comprobante.html",
+        {"venta": venta, "filas": filas, "total": total},
+    )
+
+
+@permiso_requerido("ventas", "ver")
+def venta_comprobante_pdf(request, pk):
+    venta = get_object_or_404(
+        Venta.objects.select_related("tipo_documento", "forma_pago", "usuario"), pk=pk
+    )
+    response = HttpResponse(
+        venta_comprobante_pdf_bytes(venta), content_type="application/pdf"
+    )
+    response["Content-Disposition"] = f'attachment; filename="comprobante_venta_{venta.pk}.pdf"'
+    return response
+
+
+@permiso_requerido("ventas", "ver")
+def ventas_exportar_pdf(request):
+    ventas = ventas_filtradas(request)
+    total = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
+    desde = request.GET.get("desde") or "—"
+    hasta = request.GET.get("hasta") or "—"
+    datos = {"ventas": ventas, "total_general": total}
+    response = HttpResponse(
+        ventas_pdf_bytes(datos, desde, hasta), content_type="application/pdf"
+    )
+    response["Content-Disposition"] = 'attachment; filename="ventas.pdf"'
+    return response
+
+
+@permiso_requerido("ventas", "ver")
+def ventas_exportar_excel(request):
+    ventas = ventas_filtradas(request)
+    total = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Ventas"
+    ws.append(["Fecha", "Documento", "Forma de pago", "Usuario", "Total"])
+    for celda in ws[1]:
+        celda.font = Font(bold=True)
+    for venta in ventas:
+        ws.append(
+            [
+                venta.fecha_venta,
+                str(venta.tipo_documento),
+                str(venta.forma_pago),
+                str(venta.usuario),
+                venta.total_venta,
+            ]
+        )
+    fila_total = ws.max_row + 1
+    ws.cell(row=fila_total, column=4, value="Total").font = Font(bold=True)
+    celda_total = ws.cell(row=fila_total, column=5, value=total)
+    celda_total.font = Font(bold=True)
+    for fila in ws.iter_rows(min_row=2, min_col=5, max_col=5):
+        for celda in fila:
+            celda.number_format = "#,##0.00"
+    for columna, ancho in {"A": 12, "B": 16, "C": 16, "D": 16, "E": 14}.items():
+        ws.column_dimensions[columna].width = ancho
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="ventas.xlsx"'
+    wb.save(response)
+    return response

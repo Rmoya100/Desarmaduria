@@ -3,12 +3,15 @@ from django.contrib.auth.forms import AuthenticationForm
 
 from .models import (
     ConceptoGasto,
+    DetalleVenta,
     FormaPago,
     Gasto,
     Permiso,
+    Producto,
     Rol,
     TipoDocumento,
     Usuario,
+    Venta,
 )
 from .services import ImagenInvalidaError, validar_imagen
 
@@ -164,3 +167,78 @@ class TipoDocumentoForm(EstiloFormMixin, forms.ModelForm):
     class Meta:
         model = TipoDocumento
         fields = ["tipo_documento"]
+
+
+class VentaForm(EstiloFormMixin, forms.ModelForm):
+    tipo_documento = forms.ModelChoiceField(
+        queryset=TipoDocumento.objects.order_by("tipo_documento"),
+        empty_label="Selecciona el tipo de documento",
+    )
+    forma_pago = forms.ModelChoiceField(
+        queryset=FormaPago.objects.order_by("forma_pago"),
+        empty_label="Selecciona la forma de pago",
+    )
+
+    class Meta:
+        model = Venta
+        fields = ["fecha_venta", "tipo_documento", "forma_pago"]
+        widgets = {
+            "fecha_venta": forms.DateInput(attrs={"type": "date"}),
+        }
+
+
+class DetalleVentaForm(EstiloFormMixin, forms.ModelForm):
+    # Los 3 campos son HiddenInput: la linea completa (producto, cantidad y
+    # precio) se carga desde el modal "Buscar producto" de inventario.js, no
+    # escribiendo directo en la tabla. La validacion de backend (producto
+    # valido y no eliminado, cantidad/precio requeridos) no cambia en nada.
+    producto = forms.ModelChoiceField(
+        queryset=Producto.objects.filter(fecha_eliminacion__isnull=True).order_by("nombre"),
+        widget=forms.HiddenInput(),
+    )
+
+    class Meta:
+        model = DetalleVenta
+        fields = ["producto", "cantidad", "precio"]
+        widgets = {
+            "cantidad": forms.HiddenInput(),
+            "precio": forms.HiddenInput(),
+        }
+
+
+class BaseDetalleVentaFormSet(forms.BaseInlineFormSet):
+    """Ademas de las validaciones normales del formset, no deja repetir un
+    mismo producto en dos lineas de la misma venta: cada linea valida el
+    stock disponible por separado (ver DetalleVenta.clean), asi que dos
+    lineas del mismo producto podrian aprobar en conjunto mas stock del que
+    realmente existe."""
+
+    def clean(self):
+        super().clean()
+        productos_vistos = set()
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data") or not form.cleaned_data:
+                continue
+            if form.cleaned_data.get("DELETE"):
+                continue
+            producto = form.cleaned_data.get("producto")
+            if not producto:
+                continue
+            if producto.pk in productos_vistos:
+                raise forms.ValidationError(
+                    "Un producto no puede repetirse en la misma venta."
+                )
+            productos_vistos.add(producto.pk)
+
+
+DetalleVentaFormSet = forms.inlineformset_factory(
+    Venta,
+    DetalleVenta,
+    form=DetalleVentaForm,
+    formset=BaseDetalleVentaFormSet,
+    fields=["producto", "cantidad", "precio"],
+    extra=0,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+)
