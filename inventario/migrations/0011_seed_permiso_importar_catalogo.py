@@ -1,7 +1,7 @@
 from django.db import migrations
 
 MODULOS_ACCIONES = {
-    "ingresos": ["ver", "crear"],
+    "productos": ["importar"],
 }
 
 
@@ -29,5 +29,5 @@ def revertir_seed(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [("inventario", "0007_merge_20260906_2213")]
+    dependencies = [("inventario", "0010_normalizar_nombres_catalogo")]
     operations = [migrations.RunPython(crear_seed, revertir_seed)]

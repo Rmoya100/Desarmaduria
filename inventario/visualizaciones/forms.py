@@ -1,6 +1,10 @@
 from django import forms
 
 from ..models import Categoria, Marca, Modelo, Producto, Vehiculo
+from ..servicios.catalogo import PlanillaInvalidaError, leer_planilla
+
+MAX_PLANILLA_BYTES = 5 * 1024 * 1024  # 5 MB
+EXTENSIONES_PERMITIDAS = (".xlsx", ".xlsm")
 
 
 class InventarioFiltroForm(forms.Form):
@@ -102,21 +106,6 @@ class ProductoForm(forms.ModelForm):
         return self.cleaned_data.get("codigo") or None
 
 
-class ImportarProductosForm(forms.Form):
-    archivo = forms.FileField(
-        label="Archivo Excel (.xlsx)",
-        widget=forms.ClearableFileInput(
-            attrs={"class": "input-control", "accept": ".xlsx"}
-        ),
-    )
-
-    def clean_archivo(self):
-        archivo = self.cleaned_data["archivo"]
-        if not archivo.name.lower().endswith(".xlsx"):
-            raise forms.ValidationError("El archivo debe tener extensión .xlsx.")
-        return archivo
-
-
 class EdicionMasivaForm(forms.Form):
 
     filtro_categoria = forms.ModelChoiceField(
@@ -142,7 +131,7 @@ class EdicionMasivaForm(forms.Form):
     filtro_vehiculo = forms.ModelChoiceField(
         label="Vehículo",
         queryset=Vehiculo.objects.select_related("modelo__marca").order_by(
-            "modelo__marca__nombre_marca", "modelo__nombre_modelo", "anio"
+            "modelo__marca__nombre_marca", "modelo__nombre_modelo", "anio_desde"
         ),
         required=False,
         empty_label="Todos los vehículos",
@@ -157,7 +146,7 @@ class EdicionMasivaForm(forms.Form):
     nuevo_vehiculo = forms.ModelChoiceField(
         label="Nuevo vehículo",
         queryset=Vehiculo.objects.select_related("modelo__marca").order_by(
-            "modelo__marca__nombre_marca", "modelo__nombre_modelo", "anio"
+            "modelo__marca__nombre_marca", "modelo__nombre_modelo", "anio_desde"
         ),
         required=False,
         empty_label="— sin cambio —",
@@ -240,3 +229,40 @@ class EdicionMasivaForm(forms.Form):
         if datos.get("filtro_vehiculo"):
             queryset = queryset.filter(vehiculo=datos["filtro_vehiculo"])
         return queryset
+
+
+class ImportarCatalogoForm(forms.Form):
+    """Sube la planilla y la interpreta en el mismo paso.
+
+    La lectura ocurre aqui (no en la vista) para que un archivo ilegible sea
+    un error de validacion normal del formulario, con su mensaje junto al
+    campo. El resultado queda en `self.lectura`.
+    """
+
+    archivo = forms.FileField(
+        label="Planilla Excel",
+        help_text=(
+            "Archivo .xlsx donde cada encabezado de columna es una categoría "
+            "y las filas de abajo son las piezas."
+        ),
+        widget=forms.ClearableFileInput(
+            attrs={"class": "input-control", "accept": ".xlsx,.xlsm"}
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lectura = None
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data["archivo"]
+        if archivo.size > MAX_PLANILLA_BYTES:
+            raise forms.ValidationError("La planilla no puede superar los 5 MB.")
+        if not archivo.name.lower().endswith(EXTENSIONES_PERMITIDAS):
+            raise forms.ValidationError("El archivo debe tener extensión .xlsx.")
+        try:
+            # Se abre de verdad: la extension sola no garantiza el contenido.
+            self.lectura = leer_planilla(archivo)
+        except PlanillaInvalidaError as error:
+            raise forms.ValidationError(str(error)) from error
+        return archivo

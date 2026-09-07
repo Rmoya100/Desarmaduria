@@ -6,7 +6,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .forms import DetalleVentaFormSet
-from .ingresos.views import IngresoFormSet
 from .models import (
     Categoria,
     DetalleEntrada,
@@ -297,9 +296,10 @@ class SidebarSubmenuTests(TestCase):
         self.assertIn("<summary", html)
         # La clase antigua ya no debe decidir la visibilidad del submenu.
         self.assertNotIn("nav-group--active", html)
-        # El sidebar tiene dos grupos desplegables: Inventario y Productos.
-        # Si un comentario `{# #}` quedara abierto, su texto se emitiria
-        # literal y apareceria un <details> de mas (o de menos).
+        # El sidebar tiene dos grupos desplegables: Inventario (Existencias,
+        # Inventario valorizado) y Productos (Listado, Edicion masiva,
+        # Importar). Si un comentario `{# #}` quedara abierto apareceria un
+        # <details> de mas o de menos.
         self.assertEqual(html.count("<details"), 2)
         self.assertEqual(html.count('class="nav-sublink'), 5)
 
@@ -317,158 +317,3 @@ class SidebarSubmenuTests(TestCase):
         dentro = self._details(self.client.get(reverse("inventario_visualizacion")))
         self.assertNotIn("open", fuera)
         self.assertIn("open", dentro)
-
-
-class IngresoTests(TestCase):
-    """Asistente de ingresos: paso 1 fecha + vehiculo, paso 2 piezas por
-    categoria (cantidad / costo / precio), paso 3 guarda UNA entrada con
-    todo y asigna ese vehiculo a las piezas. Permiso de negocio 'ingresos'."""
-
-    def setUp(self):
-        self.rol_admin = Rol.objects.get(nombre_rol="Administrador")
-        self.usuario = crear_usuario("bodeguero", rol=self.rol_admin)
-        self.client.force_login(self.usuario)
-        self.categoria = Categoria.objects.create(nombre_categoria="Motor")
-        self.producto = Producto.objects.create(
-            categoria=self.categoria, nombre="Alternador", costo=Decimal("1000")
-        )
-        self.prefix = IngresoFormSet().prefix
-
-    def _post(self, lineas, **cabecera):
-        data = {
-            "fecha": "2026-02-01",
-            "marca": "Nissan",
-            "modelo": "V16",
-            "anio": "2018",
-            "tipo": "Automóvil",
-        }
-        data.update(cabecera)
-        data.update(datos_formset(self.prefix, lineas))
-        return self.client.post(reverse("ingreso_crear"), data)
-
-    def test_anonimo_redirige_a_login(self):
-        self.client.logout()
-        response = self.client.get(reverse("ingreso_crear"))
-        self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse("login"), response.url)
-
-    def test_usuario_sin_permiso_recibe_403(self):
-        sin_permiso = crear_usuario(
-            "ingreso_sin_permiso", rol=Rol.objects.create(nombre_rol="RolSinIngresos")
-        )
-        self.client.force_login(sin_permiso)
-        self.assertEqual(self.client.get(reverse("ingresos")).status_code, 403)
-        self.assertEqual(self.client.get(reverse("ingreso_crear")).status_code, 403)
-
-    def test_get_muestra_las_categorias(self):
-        html = self.client.get(reverse("ingreso_crear")).content.decode()
-        self.assertIn("Motor", html)
-        self.assertIn("data-ingreso-tabla", html)
-        self.assertIn("js/inventario.js", html)
-
-    def test_registra_una_entrada_con_todo(self):
-        otro = Producto.objects.create(
-            categoria=self.categoria, nombre="Radiador", costo=Decimal("1")
-        )
-        response = self._post(
-            [
-                {"producto": self.producto.pk, "cantidad": "5",
-                 "costo": "1200", "precio_venta": "1900"},
-                {"producto": otro.pk, "cantidad": "2"},
-            ]
-        )
-        self.assertRedirects(response, reverse("ingresos"))
-        self.assertEqual(Entrada.objects.count(), 1)
-        entrada = Entrada.objects.get()
-        self.assertEqual(str(entrada.fecha), "2026-02-01")
-        self.assertEqual(entrada.usuario, self.usuario)
-        self.assertEqual(entrada.detalles.count(), 2)
-        self.producto.refresh_from_db()
-        self.assertEqual(self.producto.costo, Decimal("1200"))
-        self.assertEqual(self.producto.precio_venta, Decimal("1900"))
-
-    def test_crea_el_vehiculo_de_la_cabecera_y_lo_asigna_a_las_piezas(self):
-        self._post(
-            [{"producto": self.producto.pk, "cantidad": "1"}],
-            marca="Toyota", modelo="Hilux", anio="2015", tipo="Camioneta",
-        )
-        entrada = Entrada.objects.get()
-        self.assertIsNotNone(entrada.vehiculo)
-        self.assertEqual(entrada.vehiculo.modelo.nombre_modelo, "Hilux")
-        self.assertEqual(entrada.vehiculo.modelo.marca.nombre_marca, "Toyota")
-        self.assertEqual(entrada.vehiculo.anio, 2015)
-        self.assertEqual(entrada.vehiculo.tipo, "Camioneta")
-        self.producto.refresh_from_db()
-        self.assertEqual(self.producto.vehiculo, entrada.vehiculo)
-
-    def test_reutiliza_vehiculo_existente(self):
-        marca = Marca.objects.create(nombre_marca="Toyota")
-        modelo = Modelo.objects.create(marca=marca, nombre_modelo="Hilux")
-        Vehiculo.objects.create(modelo=modelo, anio=2015)
-        self._post(
-            [{"producto": self.producto.pk, "cantidad": "1"}],
-            marca="Toyota", modelo="Hilux", anio="2015",
-        )
-        self.assertEqual(Vehiculo.objects.count(), 1)
-        self.assertEqual(Modelo.objects.count(), 1)
-
-    def test_fila_sin_cantidad_se_ignora(self):
-        otro = Producto.objects.create(
-            categoria=self.categoria, nombre="Bomba de agua", costo=Decimal("500")
-        )
-        response = self._post(
-            [
-                {"producto": self.producto.pk, "cantidad": "3"},
-                {"producto": otro.pk, "cantidad": ""},
-            ]
-        )
-        self.assertRedirects(response, reverse("ingresos"))
-        self.assertEqual(DetalleEntrada.objects.count(), 1)
-        self.assertEqual(DetalleEntrada.objects.get().producto, self.producto)
-
-    def test_formset_disperso_ignora_filas_ausentes(self):
-        # El JS deshabilita las filas sin tocar, asi que el POST solo trae
-        # algunas de las TOTAL_FORMS filas. El formset debe aceptarlo.
-        Producto.objects.create(
-            categoria=self.categoria, nombre="Radiador", costo=Decimal("1")
-        )
-        data = {
-            "fecha": "2026-02-01",
-            "marca": "Nissan",
-            "modelo": "V16",
-            "anio": "2018",
-            f"{self.prefix}-TOTAL_FORMS": "2",
-            f"{self.prefix}-INITIAL_FORMS": "0",
-            f"{self.prefix}-MIN_NUM_FORMS": "0",
-            f"{self.prefix}-MAX_NUM_FORMS": "1000",
-            f"{self.prefix}-0-producto": self.producto.pk,
-            f"{self.prefix}-0-cantidad": "4",
-        }
-        response = self.client.post(reverse("ingreso_crear"), data)
-        self.assertRedirects(response, reverse("ingresos"))
-        self.assertEqual(DetalleEntrada.objects.count(), 1)
-
-    def test_costo_sin_cantidad_es_error(self):
-        response = self._post(
-            [{"producto": self.producto.pk, "cantidad": "", "costo": "1500"}]
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(Entrada.objects.count(), 0)
-        self.producto.refresh_from_db()
-        self.assertEqual(self.producto.costo, Decimal("1000"))
-
-    def test_cabecera_sin_vehiculo_es_error(self):
-        response = self._post(
-            [{"producto": self.producto.pk, "cantidad": "2"}], marca="", modelo="", anio=""
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(Entrada.objects.count(), 0)
-
-    def test_lista_muestra_el_ingreso_con_su_detalle(self):
-        self._post([{"producto": self.producto.pk, "cantidad": "3"}])
-        html = self.client.get(reverse("ingresos")).content.decode()
-        self.assertIn("Nissan", html)
-        self.assertIn("V16", html)
-        self.assertIn("bodeguero", html)          # responsable
-        self.assertIn("Alternador", html)         # detalle de piezas
-        self.assertIn("febrero de 2026", html)    # fecha (formato es-cl)

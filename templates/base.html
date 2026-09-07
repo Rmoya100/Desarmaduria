@@ -64,9 +64,10 @@
                         sin JavaScript, y responde a teclado. El atributo `open` deja
                         el submenu desplegado al entrar a una pagina de Inventario.
                     {% endcomment %}
-                    <details class="nav-group"{% if request.resolver_match.url_name == 'inventario_visualizacion' or request.resolver_match.url_name == 'inventario_valorizado' %} open{% endif %}>
+                    {% with url_name=request.resolver_match.url_name %}
+                    <details class="nav-group"{% if url_name == 'inventario_visualizacion' or url_name == 'inventario_valorizado' %} open{% endif %}>
                         <summary
-                            class="nav-link nav-link--parent{% if request.resolver_match.url_name == 'inventario_visualizacion' or request.resolver_match.url_name == 'inventario_valorizado' %} active{% endif %}"
+                            class="nav-link nav-link--parent{% if url_name == 'inventario_visualizacion' or url_name == 'inventario_valorizado' %} active{% endif %}"
                         >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M21 8l-9-5-9 5 9 5 9-5z"></path>
@@ -83,10 +84,11 @@
                             </svg>
                         </summary>
                         <ul class="nav-submenu">
-                            <li><a href="{% url 'inventario_visualizacion' %}" class="nav-sublink{% if request.resolver_match.url_name == 'inventario_visualizacion' %} active{% endif %}">Existencias</a></li>
-                            <li><a href="{% url 'inventario_valorizado' %}" class="nav-sublink{% if request.resolver_match.url_name == 'inventario_valorizado' %} active{% endif %}">Inventario valorizado</a></li>
+                            <li><a href="{% url 'inventario_visualizacion' %}" class="nav-sublink{% if url_name == 'inventario_visualizacion' %} active{% endif %}">Existencias</a></li>
+                            <li><a href="{% url 'inventario_valorizado' %}" class="nav-sublink{% if url_name == 'inventario_valorizado' %} active{% endif %}">Inventario valorizado</a></li>
                         </ul>
                     </details>
+                    {% endwith %}
                 </li>
                 <li>
                     {% with seccion_productos='productos_lista producto_crear producto_editar productos_edicion_masiva productos_importar' %}
@@ -106,7 +108,7 @@
                         <ul class="nav-submenu">
                             <li><a href="{% url 'productos_lista' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_crear' or request.resolver_match.url_name == 'producto_editar' %} active{% endif %}">Listado</a></li>
                             <li><a href="{% url 'productos_edicion_masiva' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_edicion_masiva' %} active{% endif %}">Edición masiva</a></li>
-                            <li><a href="{% url 'productos_importar' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_importar' %} active{% endif %}">Importar / Exportar</a></li>
+                            <li><a href="{% url 'productos_importar' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_importar' %} active{% endif %}">Importar desde Excel</a></li>
                         </ul>
                     </details>
                     {% endwith %}
@@ -115,7 +117,7 @@
                 <li>
                     <a
                         href="{% url 'ingresos' %}"
-                        class="nav-link{% if request.resolver_match.url_name == 'ingresos' or request.resolver_match.url_name == 'ingreso_crear' %} active{% endif %}"
+                        class="nav-link{% if request.resolver_match.url_name == 'ingresos' or request.resolver_match.url_name == 'ingreso_crear' or request.resolver_match.url_name == 'ingreso_detalle' or request.resolver_match.url_name == 'ingreso_editar' or request.resolver_match.url_name == 'ingreso_eliminar' %} active{% endif %}"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>

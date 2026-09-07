@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Ingreso #{{ entrada.pk }} · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header page-header--actions">
+    <h1>Ingreso #{{ entrada.pk }}</h1>
+    <div class="page-header__actions">
+        {% if puede_editar %}
+        <a href="{% url 'ingreso_editar' entrada.pk %}" class="btn">Editar</a>
+        {% endif %}
+        {% if puede_eliminar %}
+        <a href="{% url 'ingreso_eliminar' entrada.pk %}" class="btn btn-danger">Eliminar</a>
+        {% endif %}
+        <a href="{% url 'ingresos' %}" class="btn">Volver</a>
+    </div>
+</div>
+
+<div class="form-card">
+    <dl class="ingreso-ficha">
+        <div>
+            <dt>Fecha</dt>
+            <dd>{{ entrada.fecha }}</dd>
+        </div>
+        <div>
+            <dt>Vehículo</dt>
+            <dd>
+                {% if entrada.vehiculo %}
+                    {{ entrada.vehiculo.modelo.marca.nombre_marca }}
+                    {{ entrada.vehiculo.modelo.nombre_modelo }}
+                {% else %}
+                    <span class="inventory-muted">Sin vehículo informado</span>
+                {% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>Tipo</dt>
+            <dd>{{ entrada.vehiculo.tipo_vehiculo.nombre_tipo|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt>Años</dt>
+            <dd>{{ entrada.vehiculo.rango_anios|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt>Registrado por</dt>
+            <dd>{{ entrada.usuario }}</dd>
+        </div>
+        <div>
+            <dt>Unidades ingresadas</dt>
+            <dd><strong>{{ total_unidades }}</strong></dd>
+        </div>
+    </dl>
+</div>
+
+{% if detalles %}
+<div class="table-scroll">
+    <table class="data-table">
+        <caption class="visually-hidden">Piezas ingresadas</caption>
+        <thead>
+            <tr>
+                <th scope="col">Categoría</th>
+                <th scope="col">Pieza</th>
+                <th scope="col">Cantidad</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for detalle in detalles %}
+            <tr>
+                <td>{{ detalle.producto.categoria.nombre_categoria }}</td>
+                <td>{{ detalle.producto.nombre }}</td>
+                <td><span class="stock-badge">{{ detalle.cantidad }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">Este ingreso no tiene piezas registradas.</div>
+{% endif %}
+{% endblock %}

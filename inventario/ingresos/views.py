@@ -1,168 +1,255 @@
+"""Vistas del modulo de Ingresos de inventario.
+
+Funciones basadas en vistas (mismo estilo que Ventas) con permiso explicito
+por accion. La logica de negocio esta en `servicios.ingresos`; aqui solo se
+orquesta: validar formularios, llamar al servicio y elegir que renderizar.
+"""
+
 from django.contrib import messages
-from django.db import transaction
-from django.forms import BaseFormSet, formset_factory
-from django.shortcuts import redirect, render
-from django.utils import timezone
+from django.core.exceptions import ValidationError
+from django.db.models import Count, Sum
+from django.shortcuts import get_object_or_404, redirect, render
 
-from ..models import DetalleEntrada, Entrada, Marca, Modelo, Producto, Vehiculo
+from ..models import Entrada, Marca, Modelo, TipoVehiculo
 from ..permisos import permiso_requerido, tiene_permiso
-from .forms import IngresoCabeceraForm, IngresoLineaForm
-
-
-class _IngresoBaseFormSet(BaseFormSet):
-    """La tabla trae una fila por producto activo, pero el navegador solo
-    envia las filas con cantidad (deshabilita el resto). Sin esto el formset
-    exige que TODAS las filas —incluidas las vacias que nunca llegan— sean
-    validas y el guardado falla sin mostrar ningun campo en rojo."""
-
-    def add_fields(self, form, index):
-        super().add_fields(form, index)
-        form.empty_permitted = True
-
-
-IngresoFormSet = formset_factory(
-    IngresoLineaForm, formset=_IngresoBaseFormSet, extra=0
+from ..servicios.ingresos import (
+    cantidades_por_pieza,
+    catalogo_piezas,
+    eliminar_ingreso,
+    registrar_ingreso,
+)
+from .forms import (
+    CategoriasIngresoForm,
+    EntradaForm,
+    LineasIngresoForm,
+    VehiculoIngresoForm,
 )
 
 
-def _productos_activos():
-    return (
-        Producto.objects.filter(fecha_eliminacion__isnull=True)
-        .select_related("categoria")
-        .order_by("categoria__nombre_categoria", "nombre")
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def ingresos_filtrados(request):
+    """Ingresos ordenados por fecha y acotados por desde/hasta= si vienen en la
+    URL. Las cantidades se agregan en la consulta para no recorrer los
+    detalles de cada ingreso en la plantilla (N+1)."""
+    queryset = (
+        Entrada.objects.select_related(
+            "vehiculo__modelo__marca", "vehiculo__tipo_vehiculo", "usuario"
+        )
+        .annotate(
+            piezas=Count("detalles", distinct=True),
+            unidades=Sum("detalles__cantidad"),
+        )
+        .order_by("-fecha", "-id_entrada")
+    )
+    desde = request.GET.get("desde")
+    hasta = request.GET.get("hasta")
+    if desde:
+        queryset = queryset.filter(fecha__gte=desde)
+    if hasta:
+        queryset = queryset.filter(fecha__lte=hasta)
+    return queryset
+
+
+def _piezas_permitidas(entrada):
+    """Piezas que el formulario puede aceptar: el catalogo completo mas las
+    piezas ya ingresadas que no tengan una plantilla equivalente (productos
+    creados a mano desde el modulo de Productos)."""
+    piezas = list(catalogo_piezas())
+    if not entrada.pk:
+        return piezas
+    claves = {(pieza.categoria_id, pieza.nombre) for pieza in piezas}
+    for detalle in entrada.detalles.select_related("producto__categoria"):
+        producto = detalle.producto
+        if (producto.categoria_id, producto.nombre) in claves:
+            continue
+        claves.add((producto.categoria_id, producto.nombre))
+        piezas.append(producto)
+    return piezas
+
+
+def _agrupar_por_categoria(piezas, cantidades, seleccionadas):
+    """Estructura que consume la plantilla: una lista de categorias, cada una
+    con sus piezas y la cantidad tecleada (o guardada) de cada pieza."""
+    grupos = {}
+    for pieza in piezas:
+        grupo = grupos.setdefault(
+            pieza.categoria_id,
+            {
+                "categoria": pieza.categoria,
+                "piezas": [],
+                "seleccionada": pieza.categoria_id in seleccionadas,
+            },
+        )
+        cantidad = cantidades.get(pieza.pk)
+        grupo["piezas"].append(
+            {"pieza": pieza, "cantidad": "" if not cantidad else cantidad}
+        )
+    return sorted(
+        grupos.values(), key=lambda grupo: grupo["categoria"].nombre_categoria
     )
 
 
-def _initial_de(producto):
+def _initial_vehiculo(entrada):
+    vehiculo = entrada.vehiculo if entrada.pk else None
+    if vehiculo is None:
+        return {}
     return {
-        "producto": producto.pk,
-        "costo": producto.costo,
-        "precio_venta": producto.precio_venta,
+        "marca": vehiculo.modelo.marca.nombre_marca,
+        "modelo": vehiculo.modelo.nombre_modelo,
+        "tipo_vehiculo": (
+            vehiculo.tipo_vehiculo.nombre_tipo if vehiculo.tipo_vehiculo else ""
+        ),
+        "anio_desde": vehiculo.anio_desde,
+        "anio_hasta": vehiculo.anio_hasta,
     }
 
 
-def _vehiculo_de_cabecera(datos):
-    marca, _ = Marca.objects.get_or_create(nombre_marca=datos["marca"].strip())
-    modelo, _ = Modelo.objects.get_or_create(
-        marca=marca, nombre_modelo=datos["modelo"].strip()
-    )
-    tipo = (datos.get("tipo") or "").strip()
-    vehiculo, creado = Vehiculo.objects.get_or_create(
-        modelo=modelo, anio=datos["anio"], defaults={"tipo": tipo}
-    )
-    if tipo and not creado and vehiculo.tipo != tipo:
-        vehiculo.tipo = tipo
-        vehiculo.save(update_fields=["tipo"])
-    return vehiculo
+def _procesar_formulario(request, entrada, titulo, mensaje_exito):
+    piezas = _piezas_permitidas(entrada)
 
-
-def _guardar_ingreso(usuario, cabecera, lineas):
-    with transaction.atomic():
-        vehiculo = _vehiculo_de_cabecera(cabecera)
-        entrada = Entrada.objects.create(
-            fecha=cabecera["fecha"], usuario=usuario, vehiculo=vehiculo
+    if request.method == "POST":
+        form = EntradaForm(request.POST, instance=entrada)
+        form_vehiculo = VehiculoIngresoForm(request.POST)
+        form_categorias = CategoriasIngresoForm(request.POST)
+        form_lineas = LineasIngresoForm(request.POST, piezas_permitidas=piezas)
+        # Se evaluan los cuatro (sin cortocircuito) para mostrar de una vez
+        # todos los errores del formulario.
+        valido = all(
+            [
+                form.is_valid(),
+                form_vehiculo.is_valid(),
+                form_categorias.is_valid(),
+                form_lineas.is_valid(),
+            ]
         )
-        for datos in lineas:
-            producto = datos["producto"]
-            DetalleEntrada.objects.create(
-                entrada=entrada, producto=producto, cantidad=datos["cantidad"]
-            )
-            campos = ["vehiculo"]
-            producto.vehiculo = vehiculo
-            if datos.get("costo") is not None:
-                producto.costo = datos["costo"]
-                campos.append("costo")
-            if datos.get("precio_venta") is not None:
-                producto.precio_venta = datos["precio_venta"]
-                campos.append("precio_venta")
-            producto.save(update_fields=campos)
-    return entrada
+        if valido:
+            try:
+                registrar_ingreso(
+                    entrada,
+                    form_vehiculo.datos_vehiculo(),
+                    form.cleaned_data["fecha"],
+                    form_lineas.lineas,
+                    request.user,
+                )
+            except ValidationError as error:
+                form_lineas.add_error(None, error)
+            else:
+                messages.success(request, mensaje_exito)
+                return redirect("ingreso_detalle", pk=entrada.pk)
+        cantidades = form_lineas.cantidades
+        seleccionadas = {
+            categoria.pk
+            for categoria in form_categorias.cleaned_data.get("categorias", [])
+        } if form_categorias.is_valid() else set()
+    else:
+        form = EntradaForm(instance=entrada)
+        form_vehiculo = VehiculoIngresoForm(initial=_initial_vehiculo(entrada))
+        form_categorias = CategoriasIngresoForm()
+        form_lineas = None
+        cantidades = cantidades_por_pieza(entrada) if entrada.pk else {}
+        seleccionadas = {
+            pieza.categoria_id for pieza in piezas if cantidades.get(pieza.pk)
+        }
+
+    contexto = {
+        "titulo": titulo,
+        "entrada": entrada if entrada.pk else None,
+        "form": form,
+        "form_vehiculo": form_vehiculo,
+        "form_lineas": form_lineas,
+        "grupos": _agrupar_por_categoria(piezas, cantidades, seleccionadas),
+        "marcas": Marca.objects.order_by("nombre_marca"),
+        "modelos": Modelo.objects.order_by("nombre_modelo")
+        .values_list("nombre_modelo", flat=True)
+        .distinct(),
+        "tipos": TipoVehiculo.objects.order_by("nombre_tipo"),
+    }
+    return render(request, "inventario/ingresos/entrada_form.html", contexto)
+
+
+# ---------------------------------------------------------------------------
+# Vistas
+# ---------------------------------------------------------------------------
+@permiso_requerido("ingresos", "ver")
+def ingresos_lista(request):
+    ingresos = ingresos_filtrados(request)
+    contexto = {
+        "ingresos": ingresos,
+        "desde": request.GET.get("desde", ""),
+        "hasta": request.GET.get("hasta", ""),
+        "total_unidades": ingresos.aggregate(total=Sum("detalles__cantidad"))["total"]
+        or 0,
+        "puede_crear": tiene_permiso(request.user, "ingresos", "crear"),
+        "puede_editar": tiene_permiso(request.user, "ingresos", "editar"),
+        "puede_eliminar": tiene_permiso(request.user, "ingresos", "eliminar"),
+    }
+    return render(request, "inventario/ingresos/entrada_list.html", contexto)
 
 
 @permiso_requerido("ingresos", "crear")
 def ingreso_crear(request):
-    productos = list(_productos_activos())
-
-    if request.method == "POST":
-        cabecera = IngresoCabeceraForm(request.POST)
-        formset = IngresoFormSet(request.POST)
-        if not (cabecera.is_valid() and formset.is_valid()):
-            messages.error(
-                request,
-                "No se guardó el ingreso: revisa los datos marcados en rojo.",
-            )
-        else:
-            lineas = [
-                form.cleaned_data
-                for form in formset.forms
-                if form.cleaned_data.get("cantidad")
-            ]
-            if not lineas:
-                messages.error(
-                    request, "Ingresa la cantidad recibida de al menos un producto."
-                )
-            else:
-                _guardar_ingreso(request.user, cabecera.cleaned_data, lineas)
-                messages.success(
-                    request,
-                    f"Ingreso registrado: {len(lineas)} producto(s).",
-                )
-                return redirect("ingresos")
-    else:
-        cabecera = IngresoCabeceraForm(initial={"fecha": timezone.localdate()})
-        formset = IngresoFormSet(initial=[_initial_de(p) for p in productos])
-
-    productos_por_id = {p.pk: p for p in productos}
-    filas = []
-    for form in formset.forms:
-        pk = form["producto"].value()
-        filas.append((form, productos_por_id.get(int(pk)) if pk else None))
-
-    categorias = sorted(
-        {p.categoria for p in productos}, key=lambda c: c.nombre_categoria
-    )
-    return render(
+    return _procesar_formulario(
         request,
-        "inventario/ingresos/ingreso_form.html",
-        {"cabecera": cabecera, "formset": formset, "filas": filas, "categorias": categorias},
+        Entrada(),
+        "Nuevo ingreso de inventario",
+        "Ingreso registrado correctamente.",
+    )
+
+
+@permiso_requerido("ingresos", "editar")
+def ingreso_editar(request, pk):
+    entrada = get_object_or_404(
+        Entrada.objects.select_related("vehiculo__modelo__marca"), pk=pk
+    )
+    return _procesar_formulario(
+        request,
+        entrada,
+        f"Editar ingreso #{entrada.pk}",
+        "Ingreso actualizado correctamente.",
     )
 
 
 @permiso_requerido("ingresos", "ver")
-def ingresos_lista(request):
-    entradas = (
+def ingreso_detalle(request, pk):
+    entrada = get_object_or_404(
         Entrada.objects.select_related(
-            "vehiculo__modelo__marca", "usuario"
-        )
-        .prefetch_related("detalles__producto__categoria")
-        .order_by("-fecha", "-id_entrada")
+            "vehiculo__modelo__marca", "vehiculo__tipo_vehiculo", "usuario"
+        ),
+        pk=pk,
     )
-
-    desde = request.GET.get("desde") or ""
-    hasta = request.GET.get("hasta") or ""
-    if desde:
-        entradas = entradas.filter(fecha__gte=desde)
-    if hasta:
-        entradas = entradas.filter(fecha__lte=hasta)
-
-    filas = []
-    for entrada in entradas:
-        detalles = list(entrada.detalles.all())
-        filas.append(
-            {
-                "entrada": entrada,
-                "detalles": detalles,
-                "unidades": sum(d.cantidad for d in detalles),
-            }
-        )
-
-    return render(
-        request,
-        "inventario/ingresos/ingreso_list.html",
-        {
-            "filas": filas,
-            "desde": desde,
-            "hasta": hasta,
-            "puede_crear": tiene_permiso(request.user, "ingresos", "crear"),
-        },
+    detalles = entrada.detalles.select_related("producto__categoria").order_by(
+        "producto__categoria__nombre_categoria", "producto__nombre"
     )
+    contexto = {
+        "entrada": entrada,
+        "detalles": detalles,
+        "total_unidades": sum(detalle.cantidad for detalle in detalles),
+        "puede_editar": tiene_permiso(request.user, "ingresos", "editar"),
+        "puede_eliminar": tiene_permiso(request.user, "ingresos", "eliminar"),
+    }
+    return render(request, "inventario/ingresos/entrada_detalle.html", contexto)
+
+
+@permiso_requerido("ingresos", "eliminar")
+def ingreso_eliminar(request, pk):
+    entrada = get_object_or_404(
+        Entrada.objects.select_related("vehiculo__modelo__marca"), pk=pk
+    )
+    detalles = entrada.detalles.select_related("producto")
+    if request.method == "POST":
+        try:
+            eliminar_ingreso(entrada)
+        except ValidationError as error:
+            for mensaje in error.messages:
+                messages.error(request, mensaje)
+        else:
+            messages.success(request, "Ingreso eliminado correctamente.")
+            return redirect("ingresos")
+    contexto = {
+        "entrada": entrada,
+        "detalles": detalles,
+        "total_unidades": sum(detalle.cantidad for detalle in detalles),
+    }
+    return render(request, "inventario/ingresos/entrada_confirm_delete.html", contexto)

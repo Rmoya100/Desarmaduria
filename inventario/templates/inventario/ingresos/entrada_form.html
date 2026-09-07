@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ titulo }} · Desarmaduría{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/inventario.css' %}">
+{% endblock %}
+
+{% block content %}
+{% if entrada %}{% url 'ingreso_detalle' entrada.pk as url_cancelar %}{% else %}{% url 'ingresos' as url_cancelar %}{% endif %}
+
+<div class="page-header page-header--actions">
+    <h1>{{ titulo }}</h1>
+    {% if grupos %}
+    <div class="page-header__actions">
+        {% comment %}
+            El atributo `form` permite enviar el formulario desde un boton que
+            esta fuera de el: con cientos de piezas en la tabla, el boton del
+            pie queda muy lejos y este par de arriba siempre esta a la vista.
+        {% endcomment %}
+        <button type="submit" form="ingreso-form" class="btn btn-primary">Guardar ingreso</button>
+        <a href="{{ url_cancelar }}" class="btn">Cancelar</a>
+    </div>
+    {% endif %}
+</div>
+
+{% if form_lineas.non_field_errors %}
+<div class="alert alert-error" role="alert">
+    <ul class="errorlist">
+        {% for error in form_lineas.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form method="post" novalidate id="ingreso-form" class="ingreso-form" data-ingreso-form>
+    {% csrf_token %}
+
+    <div class="form-card form-card--ancho ingreso-card">
+        <fieldset class="form-seccion">
+            <legend class="form-seccion__titulo">
+                <span class="form-seccion__paso" aria-hidden="true">1</span>Datos del ingreso
+            </legend>
+            <div class="ingreso-campos">
+                <div class="field">
+                    <label for="{{ form.fecha.id_for_label }}">{{ form.fecha.label }}</label>
+                    {{ form.fecha }}
+                    {% if form.fecha.errors %}
+                    <ul class="errorlist">{% for error in form.fecha.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="form-seccion">
+            <legend class="form-seccion__titulo">
+                <span class="form-seccion__paso" aria-hidden="true">2</span>Vehículo desarmado
+            </legend>
+            <p class="ingreso-ayuda">
+                Marca, modelo y tipo se guardan siempre en MAYÚSCULAS. El año hasta
+                indica la última generación compatible: déjalo vacío si el vehículo
+                es de un solo año. Si la ficha ya existe se reutiliza en lugar de
+                duplicarla.
+            </p>
+            <div class="ingreso-campos">
+                {% for field in form_vehiculo %}
+                <div class="field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}
+                    <ul class="errorlist">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% if form_vehiculo.non_field_errors %}
+            <ul class="errorlist">
+                {% for error in form_vehiculo.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+
+            <datalist id="lista-marcas">
+                {% for marca in marcas %}<option value="{{ marca.nombre_marca }}"></option>{% endfor %}
+            </datalist>
+            <datalist id="lista-modelos">
+                {% for modelo in modelos %}<option value="{{ modelo }}"></option>{% endfor %}
+            </datalist>
+            <datalist id="lista-tipos">
+                {% for tipo in tipos %}<option value="{{ tipo.nombre_tipo }}"></option>{% endfor %}
+            </datalist>
+        </fieldset>
+
+        {% if grupos %}
+        <fieldset class="form-seccion">
+            <legend class="form-seccion__titulo">
+                <span class="form-seccion__paso" aria-hidden="true">3</span>Categorías a ingresar
+            </legend>
+            <p class="ingreso-ayuda">
+                Marca una o más categorías para desplegar sus piezas. Puedes combinar
+                todas las que salieron del mismo vehículo.
+            </p>
+            <div class="ingreso-chips">
+                {% for grupo in grupos %}
+                <label class="ingreso-chip">
+                    <input
+                        type="checkbox"
+                        class="visually-hidden"
+                        name="categorias"
+                        value="{{ grupo.categoria.pk }}"
+                        id="categoria-{{ grupo.categoria.pk }}"
+                        data-categoria
+                        {% if grupo.seleccionada %}checked{% endif %}
+                    >
+                    <span class="ingreso-chip__cara">
+                        <span class="ingreso-chip__check" aria-hidden="true">✓</span>
+                        {{ grupo.categoria.nombre_categoria }}
+                        <span class="ingreso-chip__conteo">{{ grupo.piezas|length }}<span class="visually-hidden"> piezas</span></span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+        {% endif %}
+    </div>
+
+    {% if grupos %}
+    <div class="table-panel" data-piezas>
+        <div class="table-panel__header">
+            <div>
+                <h2><span class="form-seccion__paso" aria-hidden="true">4</span>Piezas y cantidades</h2>
+                <span>
+                    Indica cuántas unidades quedan en condiciones de venderse. Si de
+                    dos puertas solo una sirve, ingresa 1.
+                </span>
+            </div>
+            <div class="ingreso-piezas__acciones">
+                <div class="filter-field">
+                    <label for="buscar-pieza">Buscar pieza</label>
+                    <input type="search" id="buscar-pieza" class="input-control" placeholder="Nombre de la pieza" data-buscar>
+                </div>
+                <button type="button" class="btn btn-sm" data-limpiar>Limpiar cantidades</button>
+            </div>
+        </div>
+
+        <p class="empty-state" data-sin-categorias hidden>
+            Selecciona al menos una categoría para ver sus piezas.
+        </p>
+        <p class="empty-state" data-sin-resultados hidden>
+            Ninguna pieza coincide con la búsqueda.
+        </p>
+
+        <div class="table-scroll">
+            <table class="data-table ingreso-tabla">
+                <caption class="visually-hidden">Piezas disponibles por categoría y cantidad a ingresar</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Pieza</th>
+                        <th scope="col" class="ingreso-tabla__cantidad">Cantidad</th>
+                    </tr>
+                </thead>
+                {% for grupo in grupos %}
+                <tbody data-grupo="{{ grupo.categoria.pk }}">
+                    <tr class="ingreso-grupo">
+                        <th scope="rowgroup" colspan="2">{{ grupo.categoria.nombre_categoria }}</th>
+                    </tr>
+                    {% for fila in grupo.piezas %}
+                    <tr data-pieza data-nombre="{{ fila.pieza.nombre }}">
+                        <td>{{ fila.pieza.nombre }}</td>
+                        <td class="ingreso-tabla__cantidad">
+                            <input
+                                type="number"
+                                class="input-control"
+                                name="cantidad_{{ fila.pieza.pk }}"
+                                value="{{ fila.cantidad }}"
+                                min="0"
+                                max="9999"
+                                step="1"
+                                inputmode="numeric"
+                                placeholder="0"
+                                aria-label="Cantidad de {{ fila.pieza.nombre }}"
+                                data-cantidad
+                            >
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="ingreso-resumen">
+        <p aria-live="polite" data-resumen>Sin piezas seleccionadas.</p>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar ingreso</button>
+            <a href="{{ url_cancelar }}" class="btn">Cancelar</a>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>
+            El catálogo de piezas está vacío. Crea primero las piezas genéricas
+            (sin vehículo asignado) desde el módulo de Productos.
+        </p>
+        <a href="{% url 'productos_lista' %}" class="btn btn-primary">Ir a Productos</a>
+    </div>
+    {% endif %}
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/ingresos.js' %}"></script>
+{% endblock %}

@@ -10,17 +10,21 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 
 from ..models import Categoria, Producto, Vehiculo
-from ..servicios.importacion import COLUMNAS_MINIMAS, procesar_filas_productos
+from ..permisos import permiso_requerido, tiene_permiso
+from ..servicios.catalogo import importar_catalogo
 from ..servicios.inventario import productos_con_stock, valor_inventario
 from .forms import (
     EdicionMasivaForm,
-    ImportarProductosForm,
+    ImportarCatalogoForm,
     InventarioFiltroForm,
     ProductoFiltroForm,
     ProductoForm,
 )
 
 ORDENES_VALIDOS = ("nombre", "-nombre", "categoria", "-categoria", "costo", "-costo")
+# Clave donde se guarda la vista previa entre el paso 1 (subir) y el paso 2
+# (confirmar). Se almacenan los datos ya interpretados, nunca el archivo.
+SESION_IMPORTACION = "importacion_catalogo"
 
 
 def _productos_filtrados(request):
@@ -132,6 +136,7 @@ def productos_lista(request):
             "filtro": filtro,
             "orden_actual": orden_actual,
             "form": ProductoForm(),
+            "puede_importar": tiene_permiso(request.user, "productos", "importar"),
         },
     )
 
@@ -172,6 +177,58 @@ def producto_editar(request, pk):
     if request.GET.get("partial"):
         plantilla = "inventario/visualizaciones/producto_form_modal.html"
     return render(request, plantilla, {"form": form, "producto": producto})
+
+
+@permiso_requerido("productos", "importar")
+def productos_importar(request):
+    """Carga masiva del catalogo en dos pasos: subir y confirmar.
+
+    Entre ambos, la vista previa vive en la sesion (los pares categoria/pieza
+    ya interpretados, no el archivo), para que el operador vea que se va a
+    crear sin tener que subir la planilla dos veces.
+    """
+    form = ImportarCatalogoForm()
+    previsualizacion = None
+
+    if request.method == "POST" and request.POST.get("confirmar") == "1":
+        datos = request.session.get(SESION_IMPORTACION)
+        if not datos:
+            messages.error(
+                request,
+                "La vista previa expiró. Vuelve a subir la planilla.",
+            )
+            return redirect("productos_importar")
+        piezas = [(categoria, nombre) for categoria, nombre in datos["piezas"]]
+        resumen = importar_catalogo(piezas)
+        request.session.pop(SESION_IMPORTACION, None)
+        messages.success(
+            request,
+            f"Importación completada: {resumen.piezas_creadas} piezas nuevas y "
+            f"{resumen.categorias_creadas} categorías nuevas "
+            f"({resumen.piezas_existentes} ya existían).",
+        )
+        return redirect("productos_lista")
+
+    if request.method == "POST":
+        form = ImportarCatalogoForm(request.POST, request.FILES)
+        if form.is_valid():
+            lectura = form.lectura
+            resumen = importar_catalogo(lectura.piezas, simular=True)
+            request.session[SESION_IMPORTACION] = {
+                "archivo": form.cleaned_data["archivo"].name,
+                "piezas": [list(pieza) for pieza in lectura.piezas],
+            }
+            previsualizacion = {
+                "archivo": form.cleaned_data["archivo"].name,
+                "lectura": lectura,
+                "resumen": resumen,
+            }
+
+    return render(
+        request,
+        "inventario/visualizaciones/importar_catalogo.html",
+        {"form": form, "previsualizacion": previsualizacion},
+    )
 
 
 @login_required
@@ -242,11 +299,11 @@ def productos_exportar_excel(request):
         ws_cat.append([categoria.pk, categoria.nombre_categoria])
 
     ws_veh = wb.create_sheet("Vehículos")
-    ws_veh.append(["id", "patente", "marca", "modelo", "anio"])
+    ws_veh.append(["id", "patente", "marca", "modelo", "años"])
     for celda in ws_veh[1]:
         celda.font = Font(bold=True)
     for vehiculo in Vehiculo.objects.select_related("modelo__marca").order_by(
-        "modelo__marca__nombre_marca", "modelo__nombre_modelo", "anio"
+        "modelo__marca__nombre_marca", "modelo__nombre_modelo", "anio_desde"
     ):
         ws_veh.append(
             [
@@ -254,7 +311,7 @@ def productos_exportar_excel(request):
                 vehiculo.patente or "",
                 vehiculo.modelo.marca.nombre_marca,
                 vehiculo.modelo.nombre_modelo,
-                vehiculo.anio,
+                vehiculo.rango_anios,
             ]
         )
 
@@ -291,64 +348,6 @@ def productos_exportar_excel(request):
     response["Content-Disposition"] = 'attachment; filename="productos.xlsx"'
     wb.save(response)
     return response
-
-
-@login_required
-def productos_importar(request):
-    if request.method == "POST":
-        form = ImportarProductosForm(request.POST, request.FILES)
-        if form.is_valid():
-            archivo = form.cleaned_data["archivo"]
-            archivo.seek(0)
-            try:
-                wb = load_workbook(archivo, read_only=True, data_only=True)
-                hoja = wb["Productos"] if "Productos" in wb.sheetnames else wb.active
-                filas_raw = [
-                    fila
-                    for fila in hoja.iter_rows(values_only=True)
-                    if any(celda is not None and str(celda).strip() for celda in fila)
-                ]
-            except Exception as exc:  # noqa: BLE001
-                messages.error(request, f"No se pudo leer el Excel: {exc}")
-                return redirect("productos_importar")
-
-            if not filas_raw:
-                messages.error(request, "El archivo no tiene filas con datos.")
-                return redirect("productos_importar")
-
-            encabezados = [
-                str(celda).strip() if celda is not None else "" for celda in filas_raw[0]
-            ]
-            faltantes = COLUMNAS_MINIMAS - set(encabezados)
-            if faltantes:
-                messages.error(
-                    request, f"Faltan columnas obligatorias: {', '.join(sorted(faltantes))}."
-                )
-                return redirect("productos_importar")
-
-            filas = [dict(zip(encabezados, fila)) for fila in filas_raw[1:]]
-            creados, actualizados, ajustes, errores = procesar_filas_productos(
-                filas, request.user
-            )
-
-            if creados or actualizados:
-                messages.success(
-                    request,
-                    f"{creados} creado(s), {actualizados} actualizado(s), "
-                    f"{ajustes} ajuste(s) de stock.",
-                )
-            for error in errores[:10]:
-                messages.warning(request, error)
-            if len(errores) > 10:
-                messages.warning(request, f"... y {len(errores) - 10} aviso(s) más.")
-            if not (creados or actualizados or errores):
-                messages.info(request, "No se registraron cambios.")
-            return redirect("productos_lista")
-    else:
-        form = ImportarProductosForm()
-    return render(
-        request, "inventario/visualizaciones/productos_importar.html", {"form": form}
-    )
 
 
 @login_required

@@ -40,7 +40,7 @@
             <tr>
                 <td><strong>{{ producto.nombre }}</strong></td>
                 <td>{{ producto.categoria.nombre_categoria }}</td>
-                <td>{% if producto.vehiculo %}{{ producto.vehiculo.modelo.marca.nombre_marca }} {{ producto.vehiculo.modelo.nombre_modelo }} · {{ producto.vehiculo.anio }}{% else %}<span class="inventory-muted">Sin vehículo informado</span>{% endif %}</td>
+                <td>{% if producto.vehiculo %}{{ producto.vehiculo.modelo.marca.nombre_marca }} {{ producto.vehiculo.modelo.nombre_modelo }} · {{ producto.vehiculo.rango_anios }}{% else %}<span class="inventory-muted">Sin vehículo informado</span>{% endif %}</td>
                 <td>{{ producto.total_entradas }}</td>
                 <td>{{ producto.total_vendido }}</td>
                 <td><span class="stock-badge{% if producto.stock_disponible <= 0 %} stock-badge--empty{% endif %}">{{ producto.stock_disponible }}</span></td>

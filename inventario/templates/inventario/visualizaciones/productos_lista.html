@@ -33,10 +33,12 @@
                 <h2>Productos registrados</h2>
                 <p class="table-count">{{ productos|length }} productos encontrados</p>
             </div>
-            <div class="table-panel__actions">
+            <div class="table-panel__acciones">
                 <a href="{% url 'productos_exportar_excel' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" class="btn" data-export-url="{% url 'productos_exportar_excel' %}">Exportar Excel</a>
-                <a href="{% url 'productos_importar' %}" class="btn">Importar</a>
                 <a href="{% url 'productos_edicion_masiva' %}" class="btn">Edición masiva</a>
+                {% if puede_importar %}
+                <a href="{% url 'productos_importar' %}" class="btn">Importar desde Excel</a>
+                {% endif %}
                 <a href="#producto-modal" class="btn btn-primary" data-modal-open="producto-modal">Nuevo producto</a>
             </div>
         </div>
