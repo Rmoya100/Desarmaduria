@@ -323,25 +323,11 @@
         // enviar: (1) se valida en el navegador para no mandar a guardar algo
         // incompleto, y (2) se deshabilitan las filas sin tocar, para que el
         // POST solo lleve unas pocas y no lo rechace Django por tamaño.
-        var valorCampo = function (nombre) {
-            var el = ingresoForm.querySelector('[name="' + nombre + '"]');
-            return el ? String(el.value).trim() : "";
-        };
-
         ingresoForm.addEventListener("submit", function (event) {
             if (ingresoAviso) ingresoAviso.hidden = true;
 
             var problemas = [];
             var conCantidad = 0;
-
-            var vehCabecera = [valorCampo("marca"), valorCampo("modelo"), valorCampo("anio")];
-            var vehCabLlenos = vehCabecera.filter(Boolean).length;
-            if (vehCabLlenos > 0 && vehCabLlenos < 3) {
-                problemas.push("Vehículo del ingreso: completa marca, modelo y año");
-            }
-            if (valorCampo("patente") && vehCabLlenos < 3) {
-                problemas.push("Vehículo del ingreso: la patente necesita marca, modelo y año");
-            }
 
             ingresoFilas.forEach(function (tr) {
                 var nombreEl = tr.querySelector("strong");

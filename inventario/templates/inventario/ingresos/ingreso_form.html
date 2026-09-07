@@ -20,24 +20,9 @@
     {% if formset.non_form_errors %}
     {% for error in formset.non_form_errors %}<p class="alert alert-error">{{ error }}</p>{% endfor %}
     {% endif %}
-    {% for error in cabecera.non_field_errors %}<p class="alert alert-error">{{ error }}</p>{% endfor %}
 
     <section class="carga-card">
-        <h2>1 · Vehículo del que se desarma</h2>
-        <p class="inventory-muted">Opcional. Queda registrado en el ingreso; si marcas la casilla, se asigna como vehículo de los productos recibidos que no traigan uno propio.</p>
-        <div class="bulk-changes">
-            <div class="filter-field">{{ cabecera.marca.label_tag }}{{ cabecera.marca }}</div>
-            <div class="filter-field">{{ cabecera.modelo.label_tag }}{{ cabecera.modelo }}</div>
-            <div class="filter-field">{{ cabecera.anio.label_tag }}{{ cabecera.anio }}</div>
-            <div class="filter-field">{{ cabecera.patente.label_tag }}{{ cabecera.patente }}</div>
-        </div>
-        <label class="categoria-check" style="margin-top:6px;">
-            {{ cabecera.asignar_a_productos }} {{ cabecera.asignar_a_productos.label }}
-        </label>
-    </section>
-
-    <section class="carga-card" style="margin-top:18px;">
-        <h2>2 · Elegir categorías</h2>
+        <h2>1 · Elegir categorías</h2>
         <p class="inventory-muted">Marca una o más categorías para ver sus productos.</p>
         <div class="categoria-checks" data-ingreso-categorias>
             {% for categoria in categorias %}
@@ -54,9 +39,9 @@
     <section class="table-panel" style="margin-top:18px;">
         <div class="table-panel__header">
             <div>
-                <h2>3 · Productos y datos del ingreso</h2>
+                <h2>2 · Productos y datos del ingreso</h2>
                 <p class="table-count" data-ingreso-contador>0 productos visibles</p>
-                <p class="inventory-muted">Deja en blanco lo que no cambie. Solo se ingresan las filas con cantidad.</p>
+                <p class="inventory-muted">Marca, modelo y año son el vehículo del que salió la pieza. Deja en blanco lo que no cambie; solo se ingresan las filas con cantidad.</p>
             </div>
             <button type="submit" class="btn btn-primary">Guardar ingreso</button>
         </div>
