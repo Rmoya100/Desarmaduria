@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load monedas %}
 
 {% block title %}Utilidad por mes · Desarmaduría{% endblock %}
 
@@ -45,15 +46,15 @@
 <div class="stat-grid">
     <div class="stat-card">
         <span class="stat-card__label">Ventas del período</span>
-        <span class="stat-card__value">${{ total_ventas|floatformat:0 }}</span>
+        <span class="stat-card__value">{{ total_ventas|clp }}</span>
     </div>
     <div class="stat-card">
         <span class="stat-card__label">Gastos del período</span>
-        <span class="stat-card__value">${{ total_gastos|floatformat:0 }}</span>
+        <span class="stat-card__value">{{ total_gastos|clp }}</span>
     </div>
     <div class="stat-card{% if total_utilidad < 0 %} stat-card--negativo{% endif %}">
         <span class="stat-card__label">Utilidad del período</span>
-        <span class="stat-card__value">${{ total_utilidad|floatformat:0 }}</span>
+        <span class="stat-card__value">{{ total_utilidad|clp }}</span>
         <span class="stat-card__meta">Ventas − gastos</span>
     </div>
 </div>
@@ -72,11 +73,11 @@
         {% for fila in filas %}
         <tr>
             <td>{{ fila.mes|date:"F Y"|capfirst }}</td>
-            <td>${{ fila.ventas|floatformat:0 }}</td>
-            <td>${{ fila.gastos|floatformat:0 }}</td>
+            <td>{{ fila.ventas|clp }}</td>
+            <td>{{ fila.gastos|clp }}</td>
             <td>
                 <span class="badge {% if fila.utilidad < 0 %}badge-danger{% else %}badge-success{% endif %}">
-                    ${{ fila.utilidad|floatformat:0 }}
+                    {{ fila.utilidad|clp }}
                 </span>
             </td>
         </tr>
@@ -85,9 +86,9 @@
     <tfoot>
         <tr>
             <td><strong>Total</strong></td>
-            <td><strong>${{ total_ventas|floatformat:0 }}</strong></td>
-            <td><strong>${{ total_gastos|floatformat:0 }}</strong></td>
-            <td><strong>${{ total_utilidad|floatformat:0 }}</strong></td>
+            <td><strong>{{ total_ventas|clp }}</strong></td>
+            <td><strong>{{ total_gastos|clp }}</strong></td>
+            <td><strong>{{ total_utilidad|clp }}</strong></td>
         </tr>
     </tfoot>
 </table>

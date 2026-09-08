@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load monedas %}
 
 {% block title %}Reporte de ventas · Desarmaduría{% endblock %}
 
@@ -45,7 +46,7 @@
 <div class="stat-grid">
     <div class="stat-card">
         <span class="stat-card__label">Total vendido</span>
-        <span class="stat-card__value">${{ total_general|floatformat:0 }}</span>
+        <span class="stat-card__value">{{ total_general|clp }}</span>
         <span class="stat-card__meta">{{ cantidad_ventas }} venta{{ cantidad_ventas|pluralize }}</span>
     </div>
 </div>
@@ -60,7 +61,7 @@
                 {% for fila in por_forma_pago %}
                 <tr>
                     <td>{{ fila.venta__forma_pago__forma_pago }}</td>
-                    <td>${{ fila.total|floatformat:0 }}</td>
+                    <td>{{ fila.total|clp }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -79,7 +80,7 @@
                 {% for fila in por_tipo_documento %}
                 <tr>
                     <td>{{ fila.venta__tipo_documento__tipo_documento }}</td>
-                    <td>${{ fila.total|floatformat:0 }}</td>
+                    <td>{{ fila.total|clp }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -108,14 +109,14 @@
             <td>{{ venta.tipo_documento }}</td>
             <td>{{ venta.forma_pago }}</td>
             <td>{{ venta.usuario }}</td>
-            <td>${{ venta.total_venta|floatformat:0 }}</td>
+            <td>{{ venta.total_venta|clp }}</td>
         </tr>
         {% endfor %}
     </tbody>
     <tfoot>
         <tr>
             <td colspan="4"><strong>Total</strong></td>
-            <td><strong>${{ total_general|floatformat:0 }}</strong></td>
+            <td><strong>{{ total_general|clp }}</strong></td>
         </tr>
     </tfoot>
 </table>

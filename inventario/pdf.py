@@ -37,7 +37,12 @@ ANCHO_PAGINA_LISTADO = landscape(A4)[0] - 2 * 1.8 * cm
 
 
 def formato_monto(valor):
-    return "$" + number_format(valor, decimal_pos=2, force_grouping=True)
+    # "$" + number_format(-1025000, ...) da "$-1.025.000,00"; un monto
+    # negativo (ej. utilidad del reporte) se escribe con el signo antes
+    # del simbolo, no despues.
+    negativo = valor < 0
+    formateado = number_format(abs(valor), decimal_pos=2, force_grouping=True)
+    return f"-${formateado}" if negativo else f"${formateado}"
 
 
 def _logo_flowable(alto=1.3 * cm):
