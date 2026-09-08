@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load monedas %}
 
 {% block title %}Dashboard · Desarmaduría{% endblock %}
 
@@ -17,7 +18,7 @@
             </svg>
         </div>
         <span class="kpi-card__label">Ventas del mes</span>
-        <span class="kpi-card__value">${{ total_ventas_mes|floatformat:0 }}</span>
+        <span class="kpi-card__value">{{ total_ventas_mes|clp }}</span>
         <span class="kpi-card__meta">{{ cantidad_ventas_mes }} venta{{ cantidad_ventas_mes|pluralize }}</span>
     </div>
 
@@ -29,7 +30,7 @@
             </svg>
         </div>
         <span class="kpi-card__label">Gastos del mes</span>
-        <span class="kpi-card__value">${{ total_gastos_mes|floatformat:0 }}</span>
+        <span class="kpi-card__value">{{ total_gastos_mes|clp }}</span>
         <span class="kpi-card__meta">{{ cantidad_gastos_mes }} gasto{{ cantidad_gastos_mes|pluralize }}</span>
     </div>
 
@@ -41,7 +42,7 @@
             </svg>
         </div>
         <span class="kpi-card__label">Utilidad del mes</span>
-        <span class="kpi-card__value {% if utilidad_mes < 0 %}kpi-card__value--peligro{% else %}kpi-card__value--exito{% endif %}">${{ utilidad_mes|floatformat:0 }}</span>
+        <span class="kpi-card__value {% if utilidad_mes < 0 %}kpi-card__value--peligro{% else %}kpi-card__value--exito{% endif %}">{{ utilidad_mes|clp }}</span>
         <span class="kpi-card__meta">Ventas − gastos</span>
     </div>
 
@@ -90,7 +91,7 @@
             </svg>
         </div>
         <span class="kpi-card__label">Valor inventario</span>
-        <span class="kpi-card__value">${{ valor_inventario|floatformat:0 }}</span>
+        <span class="kpi-card__value">{{ valor_inventario|clp }}</span>
         <span class="kpi-card__meta">A costo de adquisición</span>
     </div>
 
@@ -211,7 +212,7 @@
                 <tr>
                     <td>{{ g.fecha }}</td>
                     <td>{{ g.concepto }}</td>
-                    <td>${{ g.monto|floatformat:0 }}</td>
+                    <td>{{ g.monto|clp }}</td>
                     <td>{{ g.usuario }}</td>
                 </tr>
                 {% endfor %}
@@ -239,6 +240,13 @@
 
     Chart.defaults.font.family = "-apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
     Chart.defaults.color = colorTexto;
+
+    // '$' + (-1025000).toLocaleString('es-CL') da "$-1.025.000"; un monto
+    // negativo se escribe con el signo antes del simbolo, no despues.
+    function formatoCLP(valor) {
+        var signo = valor < 0 ? '-' : '';
+        return signo + '$' + Math.abs(valor).toLocaleString('es-CL');
+    }
 
     var datosEvolucion = JSON.parse(document.getElementById('datos-evolucion').textContent);
     new Chart(document.getElementById('graficoEvolucion'), {
@@ -275,7 +283,7 @@
                 y: {
                     beginAtZero: true,
                     grid: { color: colorBorde },
-                    ticks: { callback: (v) => '$' + v.toLocaleString('es-CL') },
+                    ticks: { callback: (v) => formatoCLP(v) },
                 },
                 x: { grid: { display: false } },
             },
@@ -283,7 +291,7 @@
                 legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } },
                 tooltip: {
                     callbacks: {
-                        label: (ctx) => ctx.dataset.label + ': $' + ctx.parsed.y.toLocaleString('es-CL'),
+                        label: (ctx) => ctx.dataset.label + ': ' + formatoCLP(ctx.parsed.y),
                     },
                 },
             },
