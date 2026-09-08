@@ -145,7 +145,7 @@ def productos_lista(request):
 def producto_crear(request):
     if request.method != "POST":
         return redirect("productos_lista")
-    form = ProductoForm(request.POST)
+    form = ProductoForm(request.POST, request.FILES)
     if form.is_valid():
         form.save()
         messages.success(request, "Producto creado correctamente.")
@@ -168,7 +168,9 @@ def producto_crear(request):
 @login_required
 def producto_editar(request, pk):
     producto = get_object_or_404(Producto, pk=pk)
-    form = ProductoForm(request.POST or None, instance=producto)
+    form = ProductoForm(
+        request.POST or None, request.FILES or None, instance=producto
+    )
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Producto actualizado correctamente.")

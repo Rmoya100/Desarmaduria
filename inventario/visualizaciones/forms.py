@@ -1,6 +1,7 @@
 from django import forms
 
 from ..models import Categoria, Marca, Modelo, Producto, Vehiculo
+from ..services import ImagenInvalidaError, validar_imagen
 from ..servicios.catalogo import PlanillaInvalidaError, leer_planilla
 
 MAX_PLANILLA_BYTES = 5 * 1024 * 1024  # 5 MB
@@ -71,7 +72,7 @@ class ProductoFiltroForm(forms.Form):
 class ProductoForm(forms.ModelForm):
     class Meta:
         model = Producto
-        fields = ["codigo", "nombre", "categoria", "vehiculo", "costo", "precio_venta"]
+        fields = ["codigo", "nombre", "categoria", "vehiculo", "costo", "precio_venta", "foto"]
         labels = {
             "codigo": "Código",
             "nombre": "Nombre de la pieza",
@@ -79,6 +80,7 @@ class ProductoForm(forms.ModelForm):
             "vehiculo": "Vehículo de origen",
             "costo": "Costo de adquisición",
             "precio_venta": "Precio de venta",
+            "foto": "Foto",
         }
         widgets = {
             "codigo": forms.TextInput(
@@ -94,6 +96,9 @@ class ProductoForm(forms.ModelForm):
             "precio_venta": forms.NumberInput(
                 attrs={"class": "input-control", "min": "0", "step": "0.01"}
             ),
+            "foto": forms.ClearableFileInput(
+                attrs={"class": "input-control", "accept": "image/*"}
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -101,9 +106,22 @@ class ProductoForm(forms.ModelForm):
         self.fields["codigo"].required = False
         self.fields["vehiculo"].required = False
         self.fields["vehiculo"].empty_label = "Sin vehículo informado"
+        self.fields["foto"].required = False
 
     def clean_codigo(self):
         return self.cleaned_data.get("codigo") or None
+
+    def clean_foto(self):
+        foto = self.cleaned_data.get("foto")
+        # Un archivo recien subido tiene content_type; el FieldFile de una
+        # foto ya guardada (al editar sin tocar este campo) no lo tiene, asi
+        # que esto valida solo cuando llega un archivo nuevo.
+        if foto and hasattr(foto, "content_type"):
+            try:
+                validar_imagen(foto)
+            except ImagenInvalidaError as exc:
+                raise forms.ValidationError(str(exc)) from exc
+        return foto
 
 
 class EdicionMasivaForm(forms.Form):

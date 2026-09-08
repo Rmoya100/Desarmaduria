@@ -279,6 +279,12 @@ class Producto(models.Model):
         blank=True,
         db_column="precioVenta",
     )
+    foto = models.ImageField(
+        upload_to="productos/%Y/%m/",
+        blank=True,
+        null=True,
+        db_column="foto",
+    )
     fecha_eliminacion = models.DateTimeField(
         null=True, blank=True, db_column="fechaEliminacion"
     )
@@ -304,6 +310,8 @@ class Producto(models.Model):
         # creada a mano como "puerta trasera" convivria en el catalogo con la
         # "PUERTA TRASERA" importada del Excel como si fueran distintas.
         self.nombre = normalizar_texto(self.nombre)
+        if self.foto and not self.foto.name.lower().endswith(".webp"):
+            self.foto = convertir_a_webp(self.foto)
         super().save(*args, **kwargs)
         # El codigo depende del pk, asi que se completa tras el primer INSERT.
         if not self.codigo:
