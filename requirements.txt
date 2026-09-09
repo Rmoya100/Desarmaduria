@@ -10,6 +10,8 @@ PyMySQL==1.2.0
 python-dotenv==1.2.3
 # Procesa imagenes (conversion a WebP, etc.). Se instala "Pillow", se importa "PIL".
 Pillow==12.3.0
+# Permite abrir fotos HEIC/HEIF (formato nativo de camara de iPhone) con Pillow.
+pillow-heif==1.7.0
 # Genera los PDF exportables (modulo Gastos).
 reportlab==5.0.1
 # Genera los Excel exportables (modulo Gastos).

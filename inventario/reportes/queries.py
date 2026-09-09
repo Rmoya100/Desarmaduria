@@ -4,7 +4,7 @@ Separado de views.py porque cada reporte se pide en 3 formatos (HTML, PDF,
 Excel) y los 3 deben agregar exactamente los mismos numeros.
 """
 
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db.models import (
@@ -19,7 +19,7 @@ from django.db.models import (
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
-from ..models import DetalleVenta, Gasto, Producto, Venta
+from ..models import DetalleVenta, Gasto, Producto, SaldoInicial, Venta
 
 MONTO = DecimalField(max_digits=12, decimal_places=2)
 
@@ -150,6 +150,57 @@ def reporte_utilidad(desde, hasta):
         "total_ventas": total_ventas,
         "total_gastos": total_gastos,
         "total_utilidad": total_ventas - total_gastos,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Reporte 4: Flujo de caja (saldo inicial + ventas - gastos)
+# ---------------------------------------------------------------------------
+def saldo_caja(hasta):
+    """Saldo en caja calculado hasta la fecha `hasta` (inclusive): el saldo
+    inicial configurado mas las ventas y menos los gastos registrados desde
+    su fecha de corte (o desde siempre, si aun no se ha cargado un saldo
+    inicial)."""
+    saldo_inicial = SaldoInicial.objects.first()
+    monto_base = saldo_inicial.monto if saldo_inicial else Decimal("0")
+    desde_corte = saldo_inicial.fecha if saldo_inicial else None
+
+    ventas = DetalleVenta.objects.filter(venta__fecha_venta__lte=hasta)
+    gastos = Gasto.objects.filter(fecha__lte=hasta)
+    if desde_corte:
+        ventas = ventas.filter(venta__fecha_venta__gte=desde_corte)
+        gastos = gastos.filter(fecha__gte=desde_corte)
+
+    total_ventas = (
+        ventas.aggregate(total=Sum(F("cantidad") * F("precio"), output_field=MONTO))["total"]
+        or Decimal("0")
+    )
+    total_gastos = gastos.aggregate(total=Sum("monto"))["total"] or Decimal("0")
+    return monto_base + total_ventas - total_gastos
+
+
+def reporte_caja(desde, hasta):
+    """Utilidad mes a mes (reutiliza reporte_utilidad) mas el saldo en caja
+    acumulado: cada fila arrastra el saldo del mes anterior, partiendo del
+    saldo justo antes de `desde`."""
+    datos = reporte_utilidad(desde, hasta)
+    saldo_inicial = SaldoInicial.objects.first()
+
+    inicio_arrastre = date.fromisoformat(desde) if isinstance(desde, str) else desde
+    if saldo_inicial and saldo_inicial.fecha > inicio_arrastre:
+        inicio_arrastre = saldo_inicial.fecha
+    saldo_antes_del_periodo = saldo_caja(inicio_arrastre - timedelta(days=1))
+
+    saldo_acumulado = saldo_antes_del_periodo
+    for fila in datos["filas"]:
+        saldo_acumulado += fila["utilidad"]
+        fila["saldo_acumulado"] = saldo_acumulado
+
+    return {
+        **datos,
+        "saldo_inicial": saldo_inicial,
+        "saldo_antes_del_periodo": saldo_antes_del_periodo,
+        "saldo_actual": saldo_acumulado,
     }
 
 

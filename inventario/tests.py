@@ -1,11 +1,15 @@
+import io
+import re
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from .forms import DetalleVentaFormSet
+from .visualizaciones.forms import ProductoForm
 from .models import (
     Categoria,
     DetalleEntrada,
@@ -14,13 +18,25 @@ from .models import (
     Marca,
     Modelo,
     Producto,
+    ProductoFoto,
     Rol,
     TipoDocumento,
     Usuario,
     Vehiculo,
     Venta,
 )
+from .servicios.ingresos import obtener_o_crear_vehiculo, resolver_producto
 from .servicios.inventario import productos_con_stock
+from .services import MAX_FOTOS_POR_PRODUCTO
+from .views import _productos_json
+
+
+def imagen_prueba(nombre="foto.png", color=(255, 0, 0)):
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (20, 20), color).save(buffer, format="PNG")
+    return SimpleUploadedFile(nombre, buffer.getvalue(), content_type="image/png")
 
 
 def crear_usuario(username, rol=None):
@@ -269,6 +285,102 @@ class VentaCicloCompletoTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class ProductoDescripcionCompletaTests(TestCase):
+    """`Producto.descripcion_completa` (y por lo tanto `__str__`) debe
+    incluir el vehiculo cuando el producto es stock real de un vehiculo
+    puntual, para no confundir en Ventas productos con el mismo nombre que
+    pertenecen a vehiculos distintos."""
+
+    def setUp(self):
+        self.categoria = Categoria.objects.create(nombre_categoria="Motor")
+
+    def test_plantilla_sin_vehiculo_muestra_solo_el_nombre(self):
+        plantilla = Producto.objects.create(categoria=self.categoria, nombre="Alternador")
+        self.assertEqual(plantilla.descripcion_completa, "ALTERNADOR")
+        self.assertEqual(str(plantilla), "ALTERNADOR")
+
+    def test_producto_con_vehiculo_incluye_marca_modelo_anio(self):
+        vehiculo = Vehiculo.objects.create(
+            modelo=Modelo.objects.create(
+                marca=Marca.objects.create(nombre_marca="TOYOTA"), nombre_modelo="YARIS"
+            ),
+            anio_desde=2008,
+        )
+        real = Producto.objects.create(
+            categoria=self.categoria, nombre="Alternador", vehiculo=vehiculo
+        )
+        self.assertIn("TOYOTA YARIS 2008", real.descripcion_completa)
+        self.assertIn("ALTERNADOR", real.descripcion_completa)
+        self.assertEqual(str(real), real.descripcion_completa)
+
+
+class ProductosJsonVentaTests(TestCase):
+    """El catalogo que alimenta el buscador de productos del formulario de
+    Ventas debe traer el vehiculo, para distinguir productos con el mismo
+    nombre que pertenecen a vehiculos distintos (ver `static/js/inventario.js`,
+    `renderizarListaModal`)."""
+
+    def test_incluye_vehiculo_para_distinguir_productos_repetidos(self):
+        categoria = Categoria.objects.create(nombre_categoria="Motor")
+        vehiculo = Vehiculo.objects.create(
+            modelo=Modelo.objects.create(
+                marca=Marca.objects.create(nombre_marca="SUZUKI"), nombre_modelo="SX4"
+            ),
+            anio_desde=2007,
+            anio_hasta=2012,
+        )
+        Producto.objects.create(categoria=categoria, nombre="Alternador", vehiculo=vehiculo)
+        Producto.objects.create(categoria=categoria, nombre="Alternador")  # plantilla
+
+        datos = _productos_json()
+        con_vehiculo = [d for d in datos if d["nombre"] == "ALTERNADOR" and d["vehiculo"]]
+        sin_vehiculo = [d for d in datos if d["nombre"] == "ALTERNADOR" and not d["vehiculo"]]
+        self.assertEqual(len(con_vehiculo), 1)
+        self.assertEqual(len(sin_vehiculo), 1)
+        self.assertIn("SUZUKI SX4", con_vehiculo[0]["vehiculo"])
+
+
+class VentaComprobanteVehiculoTests(TestCase):
+    """El comprobante de venta debe mostrar el vehiculo del producto, no
+    solo su nombre, ahora que `Producto.__str__` incluye la descripcion
+    completa."""
+
+    def setUp(self):
+        self.usuario = crear_usuario("comprobante_vehiculo")
+        self.usuario.is_superuser = True
+        self.usuario.save()
+        self.client.force_login(self.usuario)
+        categoria = Categoria.objects.create(nombre_categoria="Motor")
+        vehiculo = Vehiculo.objects.create(
+            modelo=Modelo.objects.create(
+                marca=Marca.objects.create(nombre_marca="TOYOTA"), nombre_modelo="YARIS"
+            ),
+            anio_desde=2008,
+        )
+        self.producto = Producto.objects.create(
+            categoria=categoria, nombre="Alternador", vehiculo=vehiculo, costo=Decimal("1000")
+        )
+        entrada = Entrada.objects.create(fecha="2026-01-01", usuario=self.usuario)
+        DetalleEntrada.objects.create(entrada=entrada, producto=self.producto, cantidad=5)
+        self.venta = Venta.objects.create(
+            fecha_venta="2026-01-05",
+            tipo_documento=TipoDocumento.objects.create(tipo_documento="Boleta"),
+            forma_pago=FormaPago.objects.create(forma_pago="Efectivo"),
+            usuario=self.usuario,
+        )
+        self.venta.detalles.create(producto=self.producto, cantidad=2, precio=Decimal("1500"))
+
+    def test_comprobante_html_muestra_vehiculo_del_producto(self):
+        respuesta = self.client.get(reverse("venta_comprobante", args=[self.venta.pk]))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, "TOYOTA YARIS 2008")
+
+    def test_comprobante_pdf_se_genera_sin_errores(self):
+        respuesta = self.client.get(reverse("venta_comprobante_pdf", args=[self.venta.pk]))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta["Content-Type"], "application/pdf")
+
+
 class SidebarSubmenuTests(TestCase):
     """El submenu de Inventario es un <details>, no un estado del servidor.
 
@@ -317,3 +429,226 @@ class SidebarSubmenuTests(TestCase):
         dentro = self._details(self.client.get(reverse("inventario_visualizacion")))
         self.assertNotIn("open", fuera)
         self.assertIn("open", dentro)
+
+
+class ProductoGaleriaTests(TestCase):
+    """Cobertura de la galeria de fotos (docs/analisis_fotos_productos.md):
+    varias fotos por producto, una unica principal, reordenar y promocion
+    automatica de la principal al eliminarla."""
+
+    def setUp(self):
+        self.usuario = crear_usuario("galeria")
+        self.usuario.is_superuser = True
+        self.usuario.save()
+        self.client.force_login(self.usuario)
+        self.categoria = Categoria.objects.create(nombre_categoria="Motor")
+        self.producto = Producto.objects.create(categoria=self.categoria, nombre="Alternador")
+
+    def _datos_base(self, **extra):
+        datos = {
+            "codigo": self.producto.codigo or "",
+            "nombre": self.producto.nombre,
+            "categoria": self.categoria.pk,
+            "vehiculo": "",
+            "costo": "",
+            "precio_venta": "",
+        }
+        datos.update(extra)
+        return datos
+
+    def test_subir_varias_fotos_marca_la_primera_como_principal(self):
+        respuesta = self.client.post(
+            reverse("producto_editar", args=[self.producto.pk]),
+            data=self._datos_base(fotos=[imagen_prueba("a.png"), imagen_prueba("b.png")]),
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        fotos = list(self.producto.fotos.order_by("orden", "id_foto"))
+        self.assertEqual(len(fotos), 2)
+        self.assertTrue(fotos[0].es_principal)
+        self.assertFalse(fotos[1].es_principal)
+        self.assertTrue(fotos[0].imagen.name.endswith(".webp"))
+
+    def test_no_permite_mas_del_maximo_de_fotos(self):
+        respuesta = self.client.post(
+            reverse("producto_editar", args=[self.producto.pk]),
+            data=self._datos_base(fotos=[imagen_prueba(f"{i}.png") for i in range(9)]),
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("fotos", respuesta.context["form"].errors)
+        self.assertEqual(self.producto.fotos.count(), 0)
+
+    def test_marcar_principal_desmarca_las_demas(self):
+        foto_1 = ProductoFoto.objects.create(producto=self.producto, imagen=imagen_prueba("a.png"))
+        foto_2 = ProductoFoto.objects.create(producto=self.producto, imagen=imagen_prueba("b.png"))
+        self.assertTrue(foto_1.es_principal)
+
+        respuesta = self.client.post(
+            reverse("producto_foto_principal", args=[self.producto.pk, foto_2.pk])
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        foto_1.refresh_from_db()
+        foto_2.refresh_from_db()
+        self.assertFalse(foto_1.es_principal)
+        self.assertTrue(foto_2.es_principal)
+
+    def test_eliminar_la_principal_promueve_la_siguiente(self):
+        foto_1 = ProductoFoto.objects.create(producto=self.producto, imagen=imagen_prueba("a.png"))
+        foto_2 = ProductoFoto.objects.create(producto=self.producto, imagen=imagen_prueba("b.png"))
+
+        respuesta = self.client.post(
+            reverse("producto_foto_eliminar", args=[self.producto.pk, foto_1.pk])
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertFalse(ProductoFoto.objects.filter(pk=foto_1.pk).exists())
+        foto_2.refresh_from_db()
+        self.assertTrue(foto_2.es_principal)
+
+    def test_mover_reordena_las_fotos(self):
+        foto_1 = ProductoFoto.objects.create(producto=self.producto, imagen=imagen_prueba("a.png"))
+        foto_2 = ProductoFoto.objects.create(producto=self.producto, imagen=imagen_prueba("b.png"))
+
+        respuesta = self.client.post(
+            reverse("producto_foto_mover", args=[self.producto.pk, foto_2.pk]),
+            data={"direccion": "arriba"},
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        orden = list(
+            self.producto.fotos.order_by("orden", "id_foto").values_list("pk", flat=True)
+        )
+        self.assertEqual(orden, [foto_2.pk, foto_1.pk])
+
+    def test_listado_de_productos_usa_la_foto_principal(self):
+        ProductoFoto.objects.create(producto=self.producto, imagen=imagen_prueba("a.png"))
+        respuesta = self.client.get(reverse("productos_lista"))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, "thumbnail")
+
+    def test_widget_renderiza_boton_camara_y_boton_galeria(self):
+        """El campo `fotos` debe ofrecer, sobre todo en movil, un disparador
+        que abre la camara del dispositivo y otro que abre la galeria/
+        explorador de archivos, ambos alimentando el mismo campo."""
+        html = ProductoForm().as_p()
+        self.assertEqual(html.count('capture="environment"'), 1)
+        self.assertIn('data-foto-rol="camara"', html)
+        self.assertIn('data-foto-rol="galeria"', html)
+        self.assertIn("Tomar foto", html)
+        self.assertIn("Elegir de galería", html)
+
+        entrada_camara = re.search(r'<input[^>]*data-foto-rol="camara"[^>]*>', html).group()
+        entrada_galeria = re.search(r'<input[^>]*data-foto-rol="galeria"[^>]*>', html).group()
+        # El input de camara no debe permitir seleccion multiple (una foto
+        # por toque); el de galeria si, para elegir varias de una.
+        self.assertNotIn("multiple", entrada_camara)
+        self.assertIn("multiple", entrada_galeria)
+        self.assertIn('name="fotos"', entrada_camara)
+        self.assertIn('name="fotos"', entrada_galeria)
+
+    def test_widget_no_genera_label_for_colgante(self):
+        """Ya no hay un unico <input> al que apuntar: el <label> del campo
+        no debe llevar un `for` que no exista en el HTML."""
+        widget = ProductoForm().fields["fotos"].widget
+        self.assertIsNone(widget.id_for_label("id_fotos"))
+
+    def test_subir_fotos_de_camara_y_galeria_combinadas(self):
+        """Simula lo que arma un navegador real: dos <input type="file">
+        con el mismo `name="fotos"` (uno de la camara, otro de la galeria)
+        llegan juntos en una sola lista via request.FILES.getlist."""
+        respuesta = self.client.post(
+            reverse("producto_editar", args=[self.producto.pk]),
+            data=self._datos_base(
+                fotos=[
+                    imagen_prueba("camara.png"),
+                    imagen_prueba("galeria1.png"),
+                    imagen_prueba("galeria2.png"),
+                ]
+            ),
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(self.producto.fotos.count(), 3)
+
+
+class IngresoFotoTests(TestCase):
+    """La foto por linea de Ingresos debe terminar en el producto REAL del
+    vehiculo (nunca en la plantilla), respetar MAX_FOTOS_POR_PRODUCTO y
+    rechazar ids fuera de piezas_permitidas igual que ya se rechaza
+    `cantidad_<id>` (proteccion anti-IDOR)."""
+
+    def setUp(self):
+        self.usuario = crear_usuario("ingresos")
+        self.usuario.is_superuser = True
+        self.usuario.save()
+        self.client.force_login(self.usuario)
+        self.categoria = Categoria.objects.create(nombre_categoria="Motor")
+        self.plantilla = Producto.objects.create(categoria=self.categoria, nombre="Alternador")
+
+    def _datos(self, cantidad_pk, cantidad, foto_pk=None, foto=None):
+        datos = {
+            "fecha": "2026-09-08",
+            f"cantidad_{cantidad_pk}": str(cantidad),
+            "marca": "SUZUKI",
+            "modelo": "SX4",
+            "tipo_vehiculo": "",
+            "anio_desde": "2007",
+            "anio_hasta": "2012",
+        }
+        if foto is not None:
+            datos[f"foto_{foto_pk}"] = foto
+        return datos
+
+    def test_foto_termina_en_producto_real_no_en_la_plantilla(self):
+        respuesta = self.client.post(
+            reverse("ingreso_crear"),
+            data=self._datos(self.plantilla.pk, 3, self.plantilla.pk, imagen_prueba("a.png")),
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        self.plantilla.refresh_from_db()
+        self.assertEqual(self.plantilla.fotos.count(), 0)
+        real = Producto.objects.get(nombre="ALTERNADOR", vehiculo__isnull=False)
+        self.assertEqual(real.fotos.count(), 1)
+
+    def test_respeta_el_maximo_de_fotos(self):
+        vehiculo = obtener_o_crear_vehiculo(
+            marca="SUZUKI", modelo="SX4", tipo_vehiculo="", anio_desde=2007, anio_hasta=2012
+        )
+        real = resolver_producto(self.plantilla, vehiculo)
+        for i in range(MAX_FOTOS_POR_PRODUCTO):
+            ProductoFoto.objects.create(producto=real, imagen=imagen_prueba(f"{i}.png"))
+
+        respuesta = self.client.post(
+            reverse("ingreso_crear"),
+            data=self._datos(self.plantilla.pk, 1, self.plantilla.pk, imagen_prueba("extra.png")),
+            follow=True,
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        real.refresh_from_db()
+        self.assertEqual(real.fotos.count(), MAX_FOTOS_POR_PRODUCTO)
+        mensajes = [str(m) for m in respuesta.context["messages"]]
+        self.assertTrue(any("no se guardó" in m for m in mensajes))
+
+    def test_foto_de_pieza_no_permitida_se_rechaza_como_el_idor_de_cantidad(self):
+        otro_vehiculo = Vehiculo.objects.create(
+            modelo=Modelo.objects.create(
+                marca=Marca.objects.create(nombre_marca="TOYOTA"), nombre_modelo="YARIS"
+            ),
+            anio_desde=2008,
+        )
+        ajeno = Producto.objects.create(
+            categoria=self.categoria, nombre="Alternador", vehiculo=otro_vehiculo
+        )
+        respuesta = self.client.post(
+            reverse("ingreso_crear"),
+            data=self._datos(self.plantilla.pk, 1, ajeno.pk, imagen_prueba("intento.png")),
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        errores = " ".join(respuesta.context["form_lineas"].non_field_errors())
+        self.assertIn("no pertenece al catálogo mostrado", errores)
+        self.assertEqual(ajeno.fotos.count(), 0)
+
+    def test_foto_sin_cantidad_muestra_aviso_en_vez_de_ignorarla(self):
+        respuesta = self.client.post(
+            reverse("ingreso_crear"),
+            data=self._datos(self.plantilla.pk, 0, self.plantilla.pk, imagen_prueba("huerfana.png")),
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        errores = " ".join(respuesta.context["form_lineas"].non_field_errors())
+        self.assertIn("no indicaste", errores)

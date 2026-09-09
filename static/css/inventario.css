@@ -364,6 +364,14 @@
 .ingreso-tabla__cantidad { width: 140px; text-align: right; }
 .ingreso-tabla__cantidad .input-control { width: 90px; text-align: right; }
 
+.ingreso-tabla__foto { width: 48px; text-align: center; }
+.ingreso-tabla__foto .btn { padding: 2px 8px; }
+.ingreso-tabla__foto [data-foto-abrir].is-adjunta {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    border-color: var(--color-success);
+}
+
 .ingreso-grupo th {
     position: sticky;
     top: 0;
@@ -514,4 +522,64 @@
 .modal-pieza input { width: auto; flex: 0 0 auto; }
 .modal-pieza--agregada { display: none; }
 .modal-piezas-lista .empty-state { border: 0; }
+
+/* Galería de fotos del producto (formulario de edición) */
+.foto-galeria { margin-top: 22px; }
+.foto-galeria__titulo { margin: 0 0 10px; font-size: 0.95rem; }
+.foto-galeria__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px;
+}
+.foto-galeria__item {
+    position: relative;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 6px;
+    background: var(--color-surface);
+}
+.foto-galeria__item--principal { border-color: var(--color-primary); }
+.foto-galeria__img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    display: block;
+}
+.foto-galeria__badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 999px;
+}
+.foto-galeria__acciones {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+}
+.foto-galeria__acciones form { display: contents; }
+.foto-galeria__acciones .btn-sm {
+    flex: 1;
+    padding: 2px 4px;
+    line-height: 1.4;
+}
+
+/* Selector de fotos: "Tomar foto" (cámara móvil) + "Elegir de galería" */
+.foto-input__botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+    margin-top: 6px;
+}
+
+.foto-input__resumen {
+    margin: 8px 0 0;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
 

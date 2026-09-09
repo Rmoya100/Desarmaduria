@@ -23,9 +23,11 @@ from ..models import (
     Marca,
     Modelo,
     Producto,
+    ProductoFoto,
     TipoVehiculo,
     Vehiculo,
 )
+from ..services import MAX_FOTOS_POR_PRODUCTO
 
 
 # ---------------------------------------------------------------------------
@@ -190,19 +192,51 @@ def validar_stock_resultante(entrada, lineas):
 # Operaciones de escritura
 # ---------------------------------------------------------------------------
 @transaction.atomic
-def registrar_ingreso(entrada, datos_vehiculo, fecha, lineas_base, usuario):
+def registrar_ingreso(entrada, datos_vehiculo, fecha, lineas_base, usuario, fotos_por_pieza=None):
     """Crea o actualiza un ingreso completo.
 
     `lineas_base` viene del formulario como [(pieza_del_catalogo, cantidad)].
     Todo ocurre en una transaccion: si la validacion de stock falla no queda
     ni la ficha de vehiculo ni los productos que se hubieran creado.
+
+    `fotos_por_pieza` es un dict opcional {producto_base.pk: archivo} con la
+    foto que el operador adjunto en Ingresos para esa pieza: se guarda en el
+    PRODUCTO REAL ya resuelto (nunca en la plantilla), porque son piezas
+    fisicas distintas por vehiculo aunque compartan nombre+categoria. Si ese
+    producto real ya llego al maximo de fotos, la foto se descarta y se
+    informa como aviso en vez de abortar el ingreso completo: la cantidad es
+    lo importante, la foto es un plus.
+
+    Devuelve (entrada, avisos): avisos es una lista de strings no
+    bloqueantes para mostrar como mensajes de advertencia.
     """
+    fotos_por_pieza = fotos_por_pieza or {}
     vehiculo = obtener_o_crear_vehiculo(**datos_vehiculo)
-    lineas = [
-        (resolver_producto(base, vehiculo), cantidad)
-        for base, cantidad in lineas_base
-        if cantidad > 0
-    ]
+
+    lineas = []
+    fotos_a_crear = []
+    avisos = []
+    conteo_fotos = {}
+    for base, cantidad in lineas_base:
+        if cantidad <= 0:
+            continue
+        producto = resolver_producto(base, vehiculo)
+        lineas.append((producto, cantidad))
+
+        archivo = fotos_por_pieza.get(base.pk)
+        if archivo is None:
+            continue
+        if producto.pk not in conteo_fotos:
+            conteo_fotos[producto.pk] = producto.fotos.count()
+        if conteo_fotos[producto.pk] >= MAX_FOTOS_POR_PRODUCTO:
+            avisos.append(
+                f"«{producto.nombre}» ({vehiculo}) ya tenía {MAX_FOTOS_POR_PRODUCTO} "
+                "fotos: la nueva no se guardó."
+            )
+            continue
+        conteo_fotos[producto.pk] += 1
+        fotos_a_crear.append((producto, archivo))
+
     validar_stock_resultante(entrada, lineas)
 
     entrada.fecha = fecha
@@ -219,7 +253,10 @@ def registrar_ingreso(entrada, datos_vehiculo, fecha, lineas_base, usuario):
             for producto, cantidad in lineas
         ]
     )
-    return entrada
+    for producto, archivo in fotos_a_crear:
+        ProductoFoto.objects.create(producto=producto, imagen=archivo, creado_por=usuario)
+
+    return entrada, avisos
 
 
 @transaction.atomic

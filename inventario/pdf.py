@@ -332,13 +332,134 @@ def utilidad_pdf_bytes(datos, desde, hasta):
     return buffer.getvalue()
 
 
+def caja_pdf_bytes(datos, desde, hasta):
+    """PDF con el flujo de caja: saldo inicial/antes del periodo/actual, mas
+    la utilidad mes a mes con saldo acumulado."""
+    saldo_inicial = datos["saldo_inicial"]
+    estilos = getSampleStyleSheet()
+    estilo_etiqueta = ParagraphStyle(
+        "SaldoEtiqueta", parent=estilos["Normal"], fontSize=9, textColor=COLOR_TEXTO_MUTED
+    )
+    estilo_valor = ParagraphStyle(
+        "SaldoValor",
+        parent=estilos["Normal"],
+        fontSize=12,
+        fontName="Helvetica-Bold",
+        textColor=COLOR_PRIMARIO_OSCURO,
+    )
+
+    monto_inicial = saldo_inicial.monto if saldo_inicial else Decimal("0")
+    meta_inicial = (
+        f"Desde el {saldo_inicial.fecha.strftime('%d-%m-%Y')}" if saldo_inicial else "No configurado"
+    )
+    resumen_saldo = Table(
+        [
+            [
+                Paragraph("Saldo inicial", estilo_etiqueta),
+                Paragraph("Saldo antes del período", estilo_etiqueta),
+                Paragraph("Saldo actual en caja", estilo_etiqueta),
+            ],
+            [
+                Paragraph(f"{formato_monto(monto_inicial)}<br/><font size=8>{meta_inicial}</font>", estilo_valor),
+                Paragraph(formato_monto(datos["saldo_antes_del_periodo"]), estilo_valor),
+                Paragraph(formato_monto(datos["saldo_actual"]), estilo_valor),
+            ],
+        ],
+        colWidths=[ANCHO_PAGINA_COMPROBANTE / 3] * 3,
+    )
+    resumen_saldo.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("BACKGROUND", (0, 0), (-1, -1), COLOR_FILA_ALT),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+
+    encabezados = ["Mes", "Ventas", "Gastos", "Utilidad", "Saldo acumulado"]
+    filas = [encabezados]
+    for fila in datos["filas"]:
+        filas.append(
+            [
+                fila["mes"].strftime("%B %Y").capitalize(),
+                formato_monto(fila["ventas"]),
+                formato_monto(fila["gastos"]),
+                formato_monto(fila["utilidad"]),
+                formato_monto(fila["saldo_acumulado"]),
+            ]
+        )
+    filas.append(
+        [
+            "Total",
+            formato_monto(datos["total_ventas"]),
+            formato_monto(datos["total_gastos"]),
+            formato_monto(datos["total_utilidad"]),
+            formato_monto(datos["saldo_actual"]),
+        ]
+    )
+
+    ancho_columna = ANCHO_PAGINA_COMPROBANTE / len(encabezados)
+    tabla = Table(filas, colWidths=[ancho_columna] * len(encabezados), repeatRows=1)
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    subtitulo = Paragraph(
+        _rango_legible(desde, hasta),
+        ParagraphStyle("Rango", parent=estilos["Normal"], textColor=COLOR_TEXTO_MUTED),
+    )
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title="Flujo de caja",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+    )
+    doc.build(
+        [
+            _encabezado("Flujo de caja", generado_en),
+            Spacer(1, 10),
+            subtitulo,
+            Spacer(1, 14),
+            resumen_saldo,
+            Spacer(1, 14),
+            tabla,
+        ]
+    )
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def _tabla_rotacion(titulo, productos):
     encabezados = ["Producto", "Categoría", "Cantidad vendida"]
     filas = [encabezados]
     for producto in productos:
         filas.append(
             [
-                producto.nombre,
+                producto.descripcion_completa,
                 str(producto.categoria),
                 str(producto.cantidad_vendida),
             ]
@@ -573,7 +694,7 @@ def venta_comprobante_pdf_bytes(venta):
     encabezados_detalle = ["Producto", "Cantidad", "Precio", "Subtotal"]
     filas_detalle = [encabezados_detalle]
     total = Decimal("0")
-    for detalle in venta.detalles.select_related("producto").all():
+    for detalle in venta.detalles.select_related("producto__vehiculo__modelo__marca").all():
         subtotal = detalle.cantidad * detalle.precio
         total += subtotal
         filas_detalle.append(

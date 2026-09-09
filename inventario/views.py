@@ -523,14 +523,22 @@ def _venta_form_y_formset(request, venta):
 
 def _productos_json():
     """Catalogo para el modal "Buscar Producto" del formulario de ventas
-    (inventario.js lo lee via json_script), con el stock disponible de cada
-    uno para mostrarlo en la tabla. Reusa productos_con_stock() (el mismo
-    calculo que usa el dashboard) en vez de duplicar la logica de stock.
+    (inventario.js lo lee via json_script), con el stock disponible y el
+    vehiculo de cada uno para mostrarlo en la tabla y distinguir productos
+    con el mismo nombre que pertenecen a vehiculos distintos. Reusa
+    productos_con_stock() (el mismo calculo que usa el dashboard, que ya
+    trae select_related de vehiculo) en vez de duplicar la logica de stock.
     Se recalcula en cada request: son pocas filas y asi nunca queda
     desactualizado tras crear/eliminar un producto o registrar una venta."""
-    return list(
-        productos_con_stock().values("id_producto", "nombre", "stock_disponible")
-    )
+    return [
+        {
+            "id_producto": p.id_producto,
+            "nombre": p.nombre,
+            "vehiculo": str(p.vehiculo) if p.vehiculo_id else "",
+            "stock_disponible": p.stock_disponible,
+        }
+        for p in productos_con_stock()
+    ]
 
 
 @permiso_requerido("ventas", "crear")
@@ -596,7 +604,7 @@ def venta_comprobante(request, pk):
     )
     filas = [
         {"detalle": detalle, "subtotal": detalle.cantidad * detalle.precio}
-        for detalle in venta.detalles.select_related("producto")
+        for detalle in venta.detalles.select_related("producto__vehiculo__modelo__marca")
     ]
     total = sum((fila["subtotal"] for fila in filas), Decimal("0"))
     return render(

@@ -20,6 +20,10 @@
                 <label for="filtro-vehiculo">Vehículo</label>
                 <input type="search" id="filtro-vehiculo" class="input-control" name="vehiculo" value="{{ filtro.vehiculo.value|default:'' }}" placeholder="Marca, modelo o patente">
             </div>
+            <div class="filter-field">
+                <label for="{{ filtro.tipo.id_for_label }}">Tipo</label>
+                {{ filtro.tipo }}
+            </div>
         </div>
         <div class="inventory-toolbar__actions">
             <noscript><button type="submit" class="btn btn-primary">Buscar</button></noscript>
@@ -81,18 +85,27 @@
                 {% for producto in productos %}
                 <tr>
                     <td>
-                        {% if producto.foto %}
-                        <a href="{{ producto.foto.url }}" target="_blank" rel="noopener" class="thumbnail-link">
-                            <img src="{{ producto.foto.url }}" alt="" class="thumbnail">
+                        {% with foto_principal=producto.foto_principal %}
+                        {% if foto_principal %}
+                        <a href="{{ foto_principal.imagen.url }}" target="_blank" rel="noopener" class="thumbnail-link">
+                            <img src="{{ foto_principal.imagen.url }}" alt="" class="thumbnail">
                         </a>
                         {% else %}
                         <span class="inventory-muted">—</span>
                         {% endif %}
+                        {% endwith %}
                     </td>
                     <td>{{ producto.codigo|default:'—' }}</td>
                     <td><strong>{{ producto.nombre }}</strong></td>
                     <td>{{ producto.categoria.nombre_categoria }}</td>
-                    <td>{% if producto.vehiculo %}{{ producto.vehiculo }}{% else %}<span class="inventory-muted">Sin vehículo informado</span>{% endif %}</td>
+                    <td>
+                        {% if producto.vehiculo %}
+                        <span class="badge badge-success" title="Stock real: pieza física de este vehículo puntual">Stock real</span>
+                        <div>{{ producto.vehiculo }}</div>
+                        {% else %}
+                        <span class="badge badge-muted" title="Plantilla reutilizable del catálogo: no representa stock físico por sí sola">Plantilla de catálogo</span>
+                        {% endif %}
+                    </td>
                     <td>${{ producto.costo|default:0|floatformat:0 }}</td>
                     <td>{% if producto.precio_venta is not None %}${{ producto.precio_venta|floatformat:0 }}{% else %}<span class="inventory-muted">—</span>{% endif %}</td>
                     <td class="table-actions-cell"><a href="#editar-{{ producto.pk }}" class="btn btn-sm" data-modal-open="editar-{{ producto.pk }}">Editar</a><a href="#eliminar-{{ producto.pk }}" class="btn btn-sm btn-danger" data-modal-open="eliminar-{{ producto.pk }}">Eliminar</a></td>

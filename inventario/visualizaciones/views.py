@@ -3,13 +3,13 @@ from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import F, Prefetch, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 
-from ..models import Categoria, Producto, Vehiculo
+from ..models import Categoria, Producto, ProductoFoto, Vehiculo
 from ..permisos import permiso_requerido, tiene_permiso
 from ..servicios.catalogo import importar_catalogo
 from ..servicios.inventario import productos_con_stock, valor_inventario
@@ -50,6 +50,12 @@ def _filtrar_lista_productos(request):
     filtro = ProductoFiltroForm(request.GET or None)
     productos = Producto.objects.filter(fecha_eliminacion__isnull=True).select_related(
         "categoria", "vehiculo__modelo__marca"
+    ).prefetch_related(
+        Prefetch(
+            "fotos",
+            queryset=ProductoFoto.objects.filter(es_principal=True),
+            to_attr="_fotos_principales_prefetch",
+        )
     )
     if filtro.is_valid():
         datos = filtro.cleaned_data
@@ -66,6 +72,10 @@ def _filtrar_lista_productos(request):
                 | Q(vehiculo__modelo__nombre_modelo__icontains=busqueda_vehiculo)
                 | Q(vehiculo__modelo__marca__nombre_marca__icontains=busqueda_vehiculo)
             )
+        if datos["tipo"] == "plantilla":
+            productos = productos.filter(vehiculo__isnull=True)
+        elif datos["tipo"] == "stock":
+            productos = productos.filter(vehiculo__isnull=False)
 
     orden = request.GET.get("orden", "nombre")
     if orden not in ORDENES_VALIDOS:
@@ -141,13 +151,22 @@ def productos_lista(request):
     )
 
 
+def _guardar_fotos_nuevas(form, producto, usuario):
+    """Crea una `ProductoFoto` por cada archivo subido en el campo `fotos`
+    del formulario. La primera foto de un producto sin fotos previas queda
+    marcada como principal automáticamente (ver `ProductoFoto.save()`)."""
+    for archivo in form.cleaned_data.get("fotos") or []:
+        ProductoFoto.objects.create(producto=producto, imagen=archivo, creado_por=usuario)
+
+
 @login_required
 def producto_crear(request):
     if request.method != "POST":
         return redirect("productos_lista")
     form = ProductoForm(request.POST, request.FILES)
     if form.is_valid():
-        form.save()
+        producto = form.save()
+        _guardar_fotos_nuevas(form, producto, request.user)
         messages.success(request, "Producto creado correctamente.")
         return redirect("productos_lista")
     productos = Producto.objects.filter(fecha_eliminacion__isnull=True).select_related(
@@ -172,13 +191,55 @@ def producto_editar(request, pk):
         request.POST or None, request.FILES or None, instance=producto
     )
     if request.method == "POST" and form.is_valid():
-        form.save()
+        producto = form.save()
+        _guardar_fotos_nuevas(form, producto, request.user)
         messages.success(request, "Producto actualizado correctamente.")
         return redirect("productos_lista")
     plantilla = "inventario/visualizaciones/producto_form.html"
     if request.GET.get("partial"):
         plantilla = "inventario/visualizaciones/producto_form_modal.html"
     return render(request, plantilla, {"form": form, "producto": producto})
+
+
+@login_required
+def producto_foto_eliminar(request, pk, id_foto):
+    if request.method != "POST":
+        return redirect("producto_editar", pk=pk)
+    foto = get_object_or_404(ProductoFoto, pk=id_foto, producto_id=pk)
+    foto.delete()
+    messages.success(request, "Foto eliminada.")
+    return redirect("producto_editar", pk=pk)
+
+
+@login_required
+def producto_foto_principal(request, pk, id_foto):
+    if request.method != "POST":
+        return redirect("producto_editar", pk=pk)
+    foto = get_object_or_404(ProductoFoto, pk=id_foto, producto_id=pk)
+    foto.es_principal = True
+    foto.save(update_fields=["es_principal"])
+    messages.success(request, "Foto marcada como principal.")
+    return redirect("producto_editar", pk=pk)
+
+
+@login_required
+def producto_foto_mover(request, pk, id_foto):
+    if request.method != "POST":
+        return redirect("producto_editar", pk=pk)
+    foto = get_object_or_404(ProductoFoto, pk=id_foto, producto_id=pk)
+    fotos = list(foto.producto.fotos.order_by("orden", "id_foto"))
+    indice = fotos.index(foto)
+    destino = indice - 1 if request.POST.get("direccion") == "arriba" else indice + 1
+    if 0 <= destino < len(fotos):
+        # Renumera todas las fotos del producto segun la nueva posicion, en
+        # vez de intercambiar el valor de `orden` entre las dos filas: tras
+        # la migracion de datos varias fotos pueden compartir el mismo
+        # `orden` (todas en 0), asi que un simple swap no alcanza.
+        fotos[indice], fotos[destino] = fotos[destino], fotos[indice]
+        for nuevo_orden, f in enumerate(fotos):
+            f.orden = nuevo_orden
+        ProductoFoto.objects.bulk_update(fotos, ["orden"])
+    return redirect("producto_editar", pk=pk)
 
 
 @permiso_requerido("productos", "importar")

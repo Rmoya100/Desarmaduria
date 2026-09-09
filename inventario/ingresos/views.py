@@ -113,7 +113,7 @@ def _procesar_formulario(request, entrada, titulo, mensaje_exito):
         form = EntradaForm(request.POST, instance=entrada)
         form_vehiculo = VehiculoIngresoForm(request.POST)
         form_categorias = CategoriasIngresoForm(request.POST)
-        form_lineas = LineasIngresoForm(request.POST, piezas_permitidas=piezas)
+        form_lineas = LineasIngresoForm(request.POST, request.FILES, piezas_permitidas=piezas)
         # Se evaluan los cuatro (sin cortocircuito) para mostrar de una vez
         # todos los errores del formulario.
         valido = all(
@@ -126,16 +126,19 @@ def _procesar_formulario(request, entrada, titulo, mensaje_exito):
         )
         if valido:
             try:
-                registrar_ingreso(
+                _entrada, avisos = registrar_ingreso(
                     entrada,
                     form_vehiculo.datos_vehiculo(),
                     form.cleaned_data["fecha"],
                     form_lineas.lineas,
                     request.user,
+                    fotos_por_pieza=form_lineas.fotos,
                 )
             except ValidationError as error:
                 form_lineas.add_error(None, error)
             else:
+                for aviso in avisos:
+                    messages.warning(request, aviso)
                 messages.success(request, mensaje_exito)
                 return redirect("ingreso_detalle", pk=entrada.pk)
         cantidades = form_lineas.cantidades

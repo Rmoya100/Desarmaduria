@@ -57,7 +57,7 @@
             <tbody>
                 {% for producto in mas_vendidos %}
                 <tr>
-                    <td>{{ producto.nombre }}</td>
+                    <td>{{ producto.descripcion_completa }}</td>
                     <td>{{ producto.categoria }}</td>
                     <td>{{ producto.cantidad_vendida }}</td>
                 </tr>
@@ -83,7 +83,7 @@
             <tbody>
                 {% for producto in menos_vendidos %}
                 <tr>
-                    <td>{{ producto.nombre }}</td>
+                    <td>{{ producto.descripcion_completa }}</td>
                     <td>{{ producto.categoria }}</td>
                     <td>
                         <span class="badge {% if producto.cantidad_vendida <= 0 %}badge-danger{% else %}badge-warning{% endif %}">

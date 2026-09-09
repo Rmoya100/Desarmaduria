@@ -9,6 +9,7 @@ from .models import (
     Permiso,
     Producto,
     Rol,
+    SaldoInicial,
     TipoDocumento,
     Usuario,
     Venta,
@@ -94,6 +95,21 @@ class ConceptoGastoForm(forms.ModelForm):
         fields = ["nombre_gasto"]
         widgets = {
             "nombre_gasto": forms.TextInput(attrs={"class": "form-control"}),
+        }
+
+
+class SaldoInicialForm(forms.ModelForm):
+    class Meta:
+        model = SaldoInicial
+        fields = ["monto", "fecha", "observaciones"]
+        widgets = {
+            "monto": forms.NumberInput(
+                attrs={"class": "form-control", "step": "0.01", "min": "0"}
+            ),
+            "fecha": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "observaciones": forms.Textarea(
+                attrs={"class": "form-control", "rows": 3}
+            ),
         }
 
 

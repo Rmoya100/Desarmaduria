@@ -105,7 +105,7 @@
                     {{ detalle_form.producto }}
                     {{ detalle_form.cantidad }}
                     {{ detalle_form.precio }}
-                    <td class="detalle-producto-nombre">{{ detalle_form.instance.producto.nombre|default:"" }}</td>
+                    <td class="detalle-producto-nombre">{{ detalle_form.instance.producto.descripcion_completa|default:"" }}</td>
                     <td class="detalle-cantidad-valor">{{ detalle_form.instance.cantidad|default:"" }}</td>
                     <td class="detalle-precio-valor">{% if detalle_form.instance.pk %}${{ detalle_form.instance.precio }}{% endif %}</td>
                     <td class="detalle-subtotal"></td>
@@ -165,6 +165,7 @@
                 <thead>
                     <tr>
                         <th>Producto</th>
+                        <th class="modal-producto__col-vehiculo">Vehículo</th>
                         <th class="modal-producto__col-stock">Stock (global)</th>
                     </tr>
                 </thead>

@@ -33,7 +33,7 @@
 </div>
 {% endif %}
 
-<form method="post" novalidate id="ingreso-form" class="ingreso-form" data-ingreso-form>
+<form method="post" novalidate id="ingreso-form" class="ingreso-form" data-ingreso-form enctype="multipart/form-data">
     {% csrf_token %}
 
     <div class="form-card form-card--ancho ingreso-card">
@@ -165,12 +165,13 @@
                     <tr>
                         <th scope="col">Pieza</th>
                         <th scope="col" class="ingreso-tabla__cantidad">Cantidad</th>
+                        <th scope="col" class="ingreso-tabla__foto">Foto</th>
                     </tr>
                 </thead>
                 {% for grupo in grupos %}
                 <tbody data-grupo="{{ grupo.categoria.pk }}">
                     <tr class="ingreso-grupo">
-                        <th scope="rowgroup" colspan="2">{{ grupo.categoria.nombre_categoria }}</th>
+                        <th scope="rowgroup" colspan="3">{{ grupo.categoria.nombre_categoria }}</th>
                     </tr>
                     {% for fila in grupo.piezas %}
                     <tr data-pieza data-nombre="{{ fila.pieza.nombre }}">
@@ -189,6 +190,24 @@
                                 aria-label="Cantidad de {{ fila.pieza.nombre }}"
                                 data-cantidad
                             >
+                        </td>
+                        <td class="ingreso-tabla__foto">
+                            <input
+                                type="file"
+                                name="foto_{{ fila.pieza.pk }}"
+                                accept="image/*"
+                                class="visually-hidden"
+                                data-foto-input
+                                tabindex="-1"
+                                aria-hidden="true"
+                            >
+                            <button
+                                type="button"
+                                class="btn btn-sm"
+                                data-foto-abrir
+                                aria-label="Adjuntar foto de {{ fila.pieza.nombre }}"
+                                title="Adjuntar foto"
+                            >📷</button>
                         </td>
                     </tr>
                     {% endfor %}

@@ -178,6 +178,29 @@
         if (evento.target.matches("[data-cantidad]")) {
             aplicarFiltros();
         }
+        if (evento.target.matches("[data-foto-input]")) {
+            actualizarBotonFoto(evento.target);
+        }
+    });
+
+    // Un input de archivo oculto por fila + un boton chico que lo dispara:
+    // no se usa el widget completo de camara/galeria de Productos porque acá
+    // hay cientos de filas y la mayoria nunca lleva foto.
+    function actualizarBotonFoto(input) {
+        var celda = input.closest("td");
+        var boton = celda && celda.querySelector("[data-foto-abrir]");
+        if (!boton) return;
+        var tieneArchivo = input.files && input.files.length > 0;
+        boton.classList.toggle("is-adjunta", tieneArchivo);
+        boton.title = tieneArchivo ? "Foto adjunta: " + input.files[0].name : "Adjuntar foto";
+    }
+
+    panel.addEventListener("click", function (evento) {
+        var boton = evento.target.closest("[data-foto-abrir]");
+        if (!boton) return;
+        var celda = boton.closest("td");
+        var input = celda && celda.querySelector("[data-foto-input]");
+        if (input) input.click();
     });
 
     formulario.addEventListener("submit", function () {
