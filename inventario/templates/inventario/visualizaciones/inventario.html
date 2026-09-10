@@ -33,18 +33,18 @@
         <span>{{ productos|length }} productos</span>
     </div>
     <div class="table-scroll">
-        <table class="data-table">
+        <table class="data-table tabla-cards">
             <thead><tr><th>Producto</th><th>Categoría</th><th>Automóvil</th><th>Entradas</th><th>Vendidas</th><th>Disponible</th><th>Costo</th></tr></thead>
             <tbody>
             {% for producto in productos %}
             <tr>
-                <td><strong>{{ producto.nombre }}</strong></td>
-                <td>{{ producto.categoria.nombre_categoria }}</td>
-                <td>{% if producto.vehiculo %}{{ producto.vehiculo.modelo.marca.nombre_marca }} {{ producto.vehiculo.modelo.nombre_modelo }} · {{ producto.vehiculo.rango_anios }}{% else %}<span class="inventory-muted">Sin vehículo informado</span>{% endif %}</td>
-                <td>{{ producto.total_entradas }}</td>
-                <td>{{ producto.total_vendido }}</td>
-                <td><span class="stock-badge{% if producto.stock_disponible <= 0 %} stock-badge--empty{% endif %}">{{ producto.stock_disponible }}</span></td>
-                <td>${{ producto.costo|default:0|floatformat:0 }}</td>
+                <td data-label="Producto"><strong>{{ producto.nombre }}</strong></td>
+                <td data-label="Categoría">{{ producto.categoria.nombre_categoria }}</td>
+                <td data-label="Automóvil">{% if producto.vehiculo %}{{ producto.vehiculo.modelo.marca.nombre_marca }} {{ producto.vehiculo.modelo.nombre_modelo }} · {{ producto.vehiculo.rango_anios }}{% else %}<span class="inventory-muted">Sin vehículo informado</span>{% endif %}</td>
+                <td data-label="Entradas">{{ producto.total_entradas }}</td>
+                <td data-label="Vendidas">{{ producto.total_vendido }}</td>
+                <td data-label="Disponible"><span class="stock-badge{% if producto.stock_disponible <= 0 %} stock-badge--empty{% endif %}">{{ producto.stock_disponible }}</span></td>
+                <td data-label="Costo">${{ producto.costo|default:0|floatformat:0 }}</td>
             </tr>
             {% empty %}<tr><td colspan="7" class="empty-state">No hay productos que coincidan con los filtros.</td></tr>{% endfor %}
             </tbody>

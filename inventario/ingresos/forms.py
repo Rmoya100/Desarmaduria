@@ -10,10 +10,12 @@ from django import forms
 from django.utils import timezone
 
 from ..models import Categoria, Entrada, normalizar_texto
+from ..services import ImagenInvalidaError, validar_imagen
 
 ANIO_MINIMO = 1900
 CANTIDAD_MAXIMA = 9999
 PREFIJO_CANTIDAD = "cantidad_"
+PREFIJO_FOTO = "foto_"
 
 
 def anio_maximo():
@@ -177,11 +179,12 @@ class LineasIngresoForm(forms.Form):
     catalogo (IDOR).
     """
 
-    def __init__(self, data=None, *, piezas_permitidas=(), **kwargs):
-        super().__init__(data=data, **kwargs)
+    def __init__(self, data=None, files=None, *, piezas_permitidas=(), **kwargs):
+        super().__init__(data=data, files=files, **kwargs)
         self.piezas = {pieza.pk: pieza for pieza in piezas_permitidas}
         self.cantidades = {}
         self.lineas = []
+        self.fotos = {}
 
     def clean(self):
         datos = super().clean()
@@ -215,6 +218,33 @@ class LineasIngresoForm(forms.Form):
             self.cantidades[pieza.pk] = cantidad
             if cantidad > 0:
                 self.lineas.append((pieza, cantidad))
+
+        for clave in self.files:
+            if not clave.startswith(PREFIJO_FOTO):
+                continue
+            identificador = clave[len(PREFIJO_FOTO) :]
+            pieza = self.piezas.get(int(identificador)) if identificador.isdigit() else None
+            if pieza is None:
+                errores.append(
+                    "Se recibió una foto de una pieza que no pertenece al catálogo mostrado."
+                )
+                continue
+            archivo = self.files.get(clave)
+            try:
+                validar_imagen(archivo)
+            except ImagenInvalidaError as exc:
+                errores.append(f"La foto de «{pieza.nombre}»: {exc}")
+                continue
+            if self.cantidades.get(pieza.pk, 0) <= 0:
+                # No se ignora en silencio: sin cantidad > 0 la pieza no entra
+                # al ingreso y la foto se perderia sin que el operador sepa
+                # por que (el input file no se puede "recordar" en el re-render).
+                errores.append(
+                    f"Pusiste una foto para «{pieza.nombre}» pero no indicaste "
+                    "una cantidad mayor a 0: completala o sacá la foto."
+                )
+                continue
+            self.fotos[pieza.pk] = archivo
 
         if not errores and not self.lineas:
             errores.append(

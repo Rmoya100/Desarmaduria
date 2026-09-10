@@ -1,11 +1,22 @@
+from decimal import Decimal
+
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
-from ..pdf import rotacion_pdf_bytes, utilidad_pdf_bytes, ventas_pdf_bytes
-from .queries import reporte_rotacion, reporte_utilidad, reporte_ventas, rango_desde_hasta
+from ..forms import SaldoInicialForm
+from ..models import SaldoInicial
+from ..pdf import caja_pdf_bytes, rotacion_pdf_bytes, utilidad_pdf_bytes, ventas_pdf_bytes
+from .queries import (
+    rango_desde_hasta,
+    reporte_caja,
+    reporte_rotacion,
+    reporte_utilidad,
+    reporte_ventas,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +141,96 @@ def utilidad_exportar_excel(request):
 
 
 # ---------------------------------------------------------------------------
+# Flujo de caja
+# ---------------------------------------------------------------------------
+@login_required
+def caja(request):
+    desde, hasta = rango_desde_hasta(request, meses_por_defecto=6)
+    datos = reporte_caja(desde, hasta)
+    contexto = {**datos, "desde": desde, "hasta": hasta}
+    return render(request, "inventario/reportes/caja.html", contexto)
+
+
+@login_required
+def caja_exportar_pdf(request):
+    desde, hasta = rango_desde_hasta(request, meses_por_defecto=6)
+    datos = reporte_caja(desde, hasta)
+    response = HttpResponse(
+        caja_pdf_bytes(datos, desde, hasta), content_type="application/pdf"
+    )
+    response["Content-Disposition"] = 'attachment; filename="reporte_flujo_caja.pdf"'
+    return response
+
+
+@login_required
+def caja_exportar_excel(request):
+    desde, hasta = rango_desde_hasta(request, meses_por_defecto=6)
+    datos = reporte_caja(desde, hasta)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Flujo de caja"
+    ws.append(["Mes", "Ventas", "Gastos", "Utilidad", "Saldo acumulado"])
+    for celda in ws[1]:
+        celda.font = Font(bold=True)
+    for fila in datos["filas"]:
+        ws.append(
+            [
+                fila["mes"].strftime("%m-%Y"),
+                fila["ventas"],
+                fila["gastos"],
+                fila["utilidad"],
+                fila["saldo_acumulado"],
+            ]
+        )
+    fila_total = ws.max_row + 1
+    ws.cell(row=fila_total, column=1, value="Total").font = Font(bold=True)
+    ws.cell(row=fila_total, column=2, value=datos["total_ventas"]).font = Font(bold=True)
+    ws.cell(row=fila_total, column=3, value=datos["total_gastos"]).font = Font(bold=True)
+    ws.cell(row=fila_total, column=4, value=datos["total_utilidad"]).font = Font(bold=True)
+    for fila in ws.iter_rows(min_row=2, min_col=2, max_col=5):
+        for celda in fila:
+            celda.number_format = "#,##0.00"
+    for columna, ancho in {"A": 14, "B": 16, "C": 16, "D": 16, "E": 18}.items():
+        ws.column_dimensions[columna].width = ancho
+
+    fila_saldo = ws.max_row + 2
+    etiquetas = [
+        ("Saldo inicial", datos["saldo_inicial"].monto if datos["saldo_inicial"] else Decimal("0")),
+        ("Saldo antes del período", datos["saldo_antes_del_periodo"]),
+        ("Saldo actual", datos["saldo_actual"]),
+    ]
+    for etiqueta, valor in etiquetas:
+        ws.cell(row=fila_saldo, column=1, value=etiqueta).font = Font(bold=True)
+        celda_valor = ws.cell(row=fila_saldo, column=2, value=valor)
+        celda_valor.number_format = "#,##0.00"
+        fila_saldo += 1
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="reporte_flujo_caja.xlsx"'
+    wb.save(response)
+    return response
+
+
+@login_required
+def saldo_inicial_editar(request):
+    instancia = SaldoInicial.objects.filter(pk=1).first() or SaldoInicial(pk=1)
+    if request.method == "POST":
+        form = SaldoInicialForm(request.POST, instance=instancia)
+        if form.is_valid():
+            saldo = form.save(commit=False)
+            saldo.usuario = request.user
+            saldo.save()
+            messages.success(request, "Saldo inicial actualizado correctamente.")
+            return redirect("reporte_caja")
+    else:
+        form = SaldoInicialForm(instance=instancia)
+    return render(request, "inventario/saldo_inicial_form.html", {"form": form})
+
+
+# ---------------------------------------------------------------------------
 # Rotacion de productos
 # ---------------------------------------------------------------------------
 @login_required
@@ -163,14 +264,14 @@ def rotacion_exportar_excel(request):
     for celda in ws[1]:
         celda.font = Font(bold=True)
     for producto in datos["mas_vendidos"]:
-        ws.append([producto.nombre, str(producto.categoria), producto.cantidad_vendida])
+        ws.append([producto.descripcion_completa, str(producto.categoria), producto.cantidad_vendida])
 
     ws2 = wb.create_sheet("Menos vendidos")
     ws2.append(["Producto", "Categoría", "Cantidad vendida"])
     for celda in ws2[1]:
         celda.font = Font(bold=True)
     for producto in datos["menos_vendidos"]:
-        ws2.append([producto.nombre, str(producto.categoria), producto.cantidad_vendida])
+        ws2.append([producto.descripcion_completa, str(producto.categoria), producto.cantidad_vendida])
 
     for hoja in (ws, ws2):
         for columna, ancho in {"A": 28, "B": 18, "C": 18}.items():

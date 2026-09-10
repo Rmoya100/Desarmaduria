@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load monedas %}
 
-{% block title %}Utilidad por mes · Desarmaduría{% endblock %}
+{% block title %}Flujo de caja · Desarmaduría{% endblock %}
 
 {% block content %}
 <div class="page-header page-header--actions">
-    <h1>Utilidad por mes</h1>
+    <h1>Flujo de caja</h1>
     <div class="page-header__actions">
-        <a href="{% url 'reporte_utilidad_pdf' %}?desde={{ desde }}&hasta={{ hasta }}" class="btn btn-pdf">
+        <a href="{% url 'reporte_caja_pdf' %}?desde={{ desde }}&hasta={{ hasta }}" class="btn btn-pdf">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
                 <path d="M14 3v5h5"></path>
@@ -15,7 +15,7 @@
             </svg>
             <span>PDF</span>
         </a>
-        <a href="{% url 'reporte_utilidad_excel' %}?desde={{ desde }}&hasta={{ hasta }}" class="btn btn-excel">
+        <a href="{% url 'reporte_caja_excel' %}?desde={{ desde }}&hasta={{ hasta }}" class="btn btn-excel">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
                 <path d="M14 3v5h5"></path>
@@ -23,6 +23,7 @@
             </svg>
             <span>Excel</span>
         </a>
+        <a href="{% url 'saldo_inicial_editar' %}" class="btn">Configurar saldo inicial</a>
     </div>
 </div>
 
@@ -39,23 +40,33 @@
     </div>
     <div class="form-group filter-bar__actions">
         <button type="submit" class="btn btn-primary">Filtrar</button>
-        <a href="{% url 'reporte_utilidad' %}" class="btn">Limpiar</a>
+        <a href="{% url 'reporte_caja' %}" class="btn">Limpiar</a>
     </div>
 </form>
 
+{% if not saldo_inicial %}
+<div class="empty-state">
+    Aún no has configurado un saldo inicial. Los montos de este reporte parten de $0.
+    <a href="{% url 'saldo_inicial_editar' %}">Configurar saldo inicial</a>
+</div>
+{% endif %}
+
 <div class="stat-grid">
     <div class="stat-card">
-        <span class="stat-card__label">Ventas del período</span>
-        <span class="stat-card__value">{{ total_ventas|clp }}</span>
+        <span class="stat-card__label">Saldo inicial</span>
+        <span class="stat-card__value">{{ saldo_inicial.monto|default:0|clp }}</span>
+        <span class="stat-card__meta">
+            {% if saldo_inicial %}Desde el {{ saldo_inicial.fecha|date:"d-m-Y" }}{% else %}No configurado{% endif %}
+        </span>
     </div>
     <div class="stat-card">
-        <span class="stat-card__label">Gastos del período</span>
-        <span class="stat-card__value">{{ total_gastos|clp }}</span>
+        <span class="stat-card__label">Saldo antes del período</span>
+        <span class="stat-card__value">{{ saldo_antes_del_periodo|clp }}</span>
     </div>
-    <div class="stat-card{% if total_utilidad < 0 %} stat-card--negativo{% endif %}">
-        <span class="stat-card__label">Utilidad del período</span>
-        <span class="stat-card__value">{{ total_utilidad|clp }}</span>
-        <span class="stat-card__meta">Ventas − gastos</span>
+    <div class="stat-card{% if saldo_actual < 0 %} stat-card--negativo{% endif %}">
+        <span class="stat-card__label">Saldo actual en caja</span>
+        <span class="stat-card__value">{{ saldo_actual|clp }}</span>
+        <span class="stat-card__meta">Al {{ hasta|date:"d-m-Y" }}</span>
     </div>
 </div>
 
@@ -67,6 +78,7 @@
             <th>Ventas</th>
             <th>Gastos</th>
             <th>Utilidad</th>
+            <th>Saldo acumulado</th>
         </tr>
     </thead>
     <tbody>
@@ -80,6 +92,7 @@
                     {{ fila.utilidad|clp }}
                 </span>
             </td>
+            <td data-label="Saldo acumulado">{{ fila.saldo_acumulado|clp }}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -89,6 +102,7 @@
             <td data-label="Ventas"><strong>{{ total_ventas|clp }}</strong></td>
             <td data-label="Gastos"><strong>{{ total_gastos|clp }}</strong></td>
             <td data-label="Utilidad"><strong>{{ total_utilidad|clp }}</strong></td>
+            <td data-label="Saldo acumulado"><strong>{{ saldo_actual|clp }}</strong></td>
         </tr>
     </tfoot>
 </table>

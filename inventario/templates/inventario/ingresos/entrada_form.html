@@ -33,7 +33,7 @@
 </div>
 {% endif %}
 
-<form method="post" novalidate id="ingreso-form" class="ingreso-form" data-ingreso-form>
+<form method="post" novalidate id="ingreso-form" class="ingreso-form" data-ingreso-form enctype="multipart/form-data">
     {% csrf_token %}
 
     <div class="form-card form-card--ancho ingreso-card">
@@ -165,12 +165,13 @@
                     <tr>
                         <th scope="col">Pieza</th>
                         <th scope="col" class="ingreso-tabla__cantidad">Cantidad</th>
+                        <th scope="col" class="ingreso-tabla__foto">Foto</th>
                     </tr>
                 </thead>
                 {% for grupo in grupos %}
                 <tbody data-grupo="{{ grupo.categoria.pk }}">
                     <tr class="ingreso-grupo">
-                        <th scope="rowgroup" colspan="2">{{ grupo.categoria.nombre_categoria }}</th>
+                        <th scope="rowgroup" colspan="3">{{ grupo.categoria.nombre_categoria }}</th>
                     </tr>
                     {% for fila in grupo.piezas %}
                     <tr data-pieza data-nombre="{{ fila.pieza.nombre }}">
@@ -189,6 +190,31 @@
                                 aria-label="Cantidad de {{ fila.pieza.nombre }}"
                                 data-cantidad
                             >
+                        </td>
+                        <td class="ingreso-tabla__foto">
+                            <input
+                                type="file"
+                                name="foto_{{ fila.pieza.pk }}"
+                                accept="image/*"
+                                class="visually-hidden"
+                                data-foto-input
+                                tabindex="-1"
+                                aria-hidden="true"
+                            >
+                            <button
+                                type="button"
+                                class="btn btn-sm foto-boton"
+                                data-foto-abrir
+                                data-pieza-nombre="{{ fila.pieza.nombre }}"
+                                aria-label="Adjuntar foto de {{ fila.pieza.nombre }}"
+                                title="Adjuntar foto"
+                            >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.3-2h7l1.3 2h2.2A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-9z"></path>
+                                    <circle cx="12" cy="13" r="3.5"></circle>
+                                </svg>
+                            </button>
+                            <span class="foto-preview" data-foto-preview></span>
                         </td>
                     </tr>
                     {% endfor %}
@@ -241,6 +267,36 @@
                 <button type="button" class="btn" data-cerrar-agregar>Cancelar</button>
                 <button type="button" class="btn btn-primary" data-confirmar-agregar>Agregar seleccionadas</button>
             </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if grupos %}
+    {% comment %}
+        Una sola hoja para toda la tabla: con cientos de filas, repetir los
+        dos botones por fila infla el DOM y aprieta la columna en el celular.
+        El JS recuerda que fila la abrio y ajusta `capture` en su input.
+    {% endcomment %}
+    <div class="foto-sheet" data-foto-sheet hidden role="dialog" aria-modal="true" aria-labelledby="foto-sheet-titulo">
+        <div class="foto-sheet__fondo" data-foto-sheet-cerrar></div>
+        <div class="foto-sheet__panel">
+            <p class="foto-sheet__titulo" id="foto-sheet-titulo" data-foto-sheet-titulo>Foto de la pieza</p>
+            <button type="button" class="btn foto-sheet__opcion" data-foto-modo="camara">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.3-2h7l1.3 2h2.2A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-9z"></path>
+                    <circle cx="12" cy="13" r="3.5"></circle>
+                </svg>
+                Tomar foto
+            </button>
+            <button type="button" class="btn foto-sheet__opcion" data-foto-modo="galeria">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
+                    <circle cx="8.5" cy="10" r="1.6"></circle>
+                    <path d="M4 17l5-5 3.5 3.5L16 12l4 4"></path>
+                </svg>
+                Elegir de galería
+            </button>
+            <button type="button" class="btn foto-sheet__cancelar" data-foto-sheet-cerrar>Cancelar</button>
         </div>
     </div>
     {% endif %}

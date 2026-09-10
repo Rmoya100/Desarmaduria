@@ -64,6 +64,53 @@
         }
     });
 
+    function actualizarResumenFoto(contenedor) {
+        var inputs = contenedor.querySelectorAll('input[type="file"]');
+        var resumen = contenedor.querySelector("[data-foto-resumen]");
+        var botonQuitar = contenedor.querySelector("[data-foto-quitar]");
+        var maxFotos = parseInt(contenedor.getAttribute("data-max-fotos"), 10) || null;
+        var total = 0;
+        inputs.forEach(function (input) { total += input.files ? input.files.length : 0; });
+
+        if (total === 0) {
+            resumen.hidden = true;
+            botonQuitar.hidden = true;
+            return;
+        }
+        var texto = total === 1 ? "Se agregará 1 foto nueva." : "Se agregarán " + total + " fotos nuevas.";
+        if (maxFotos && total > maxFotos) {
+            texto += " El máximo permitido es " + maxFotos + "; el servidor rechazará el resto.";
+        }
+        resumen.textContent = texto;
+        resumen.hidden = false;
+        botonQuitar.hidden = false;
+    }
+
+    document.addEventListener("change", function (event) {
+        if (event.target.type !== "file") return;
+        var contenedor = event.target.closest("[data-foto-input]");
+        if (contenedor) actualizarResumenFoto(contenedor);
+    });
+
+    document.addEventListener("click", function (event) {
+        var botonAbrir = event.target.closest("[data-foto-abrir]");
+        if (botonAbrir) {
+            var contenedorAbrir = botonAbrir.closest("[data-foto-input]");
+            var rol = botonAbrir.getAttribute("data-foto-abrir");
+            var input = contenedorAbrir && contenedorAbrir.querySelector('[data-foto-rol="' + rol + '"]');
+            if (input) input.click();
+            return;
+        }
+        var botonQuitar = event.target.closest("[data-foto-quitar]");
+        if (botonQuitar) {
+            var contenedorQuitar = botonQuitar.closest("[data-foto-input]");
+            if (contenedorQuitar) {
+                contenedorQuitar.querySelectorAll('input[type="file"]').forEach(function (input) { input.value = ""; });
+                actualizarResumenFoto(contenedorQuitar);
+            }
+        }
+    });
+
     var formsetTabla = document.querySelector("[data-formset]");
     if (formsetTabla) {
         var cuerpoFormset = formsetTabla.querySelector("[data-formset-body]");
@@ -142,14 +189,16 @@
             var disponibles = catalogoProductos.filter(function (producto) {
                 return (
                     yaEnCarrito.indexOf(String(producto.id_producto)) === -1 &&
-                    (!normalizado || normalizarProducto(producto.nombre).indexOf(normalizado) !== -1)
+                    (!normalizado ||
+                        normalizarProducto(producto.nombre).indexOf(normalizado) !== -1 ||
+                        normalizarProducto(producto.vehiculo).indexOf(normalizado) !== -1)
                 );
             });
 
             listaProductosModal.innerHTML = "";
             if (!disponibles.length) {
                 var filaVacia = document.createElement("tr");
-                filaVacia.innerHTML = '<td colspan="2" class="empty-state">Sin productos que coincidan.</td>';
+                filaVacia.innerHTML = '<td colspan="3" class="empty-state">Sin productos que coincidan.</td>';
                 listaProductosModal.appendChild(filaVacia);
                 return;
             }
@@ -158,9 +207,14 @@
                 fila.className = "modal-producto__fila";
                 fila.dataset.id = producto.id_producto;
                 fila.dataset.nombre = producto.nombre;
+                fila.dataset.vehiculo = producto.vehiculo || "";
 
                 var celdaNombre = document.createElement("td");
                 celdaNombre.textContent = producto.nombre;
+
+                var celdaVehiculo = document.createElement("td");
+                celdaVehiculo.className = "modal-producto__col-vehiculo";
+                celdaVehiculo.textContent = producto.vehiculo || "Sin vehículo (plantilla)";
 
                 var celdaStock = document.createElement("td");
                 celdaStock.className = "modal-producto__col-stock";
@@ -170,14 +224,15 @@
                 }
 
                 fila.appendChild(celdaNombre);
+                fila.appendChild(celdaVehiculo);
                 fila.appendChild(celdaStock);
                 listaProductosModal.appendChild(fila);
             });
         }
 
-        function elegirProductoDesdeModal(id, nombre) {
-            productoElegido = { id: id, nombre: nombre };
-            inputBuscadorNuevo.value = nombre;
+        function elegirProductoDesdeModal(id, nombre, vehiculo) {
+            productoElegido = { id: id, nombre: nombre, vehiculo: vehiculo };
+            inputBuscadorNuevo.value = vehiculo ? nombre + " · " + vehiculo : nombre;
             ocultarErrorNuevaLinea();
             setModal(modalBuscarProducto, false);
             inputCantidadNuevo.focus();
@@ -214,7 +269,9 @@
             fila.querySelector('input[name$="-producto"]').value = productoElegido.id;
             fila.querySelector('input[name$="-cantidad"]').value = cantidad;
             fila.querySelector('input[name$="-precio"]').value = precio;
-            fila.querySelector(".detalle-producto-nombre").textContent = productoElegido.nombre;
+            fila.querySelector(".detalle-producto-nombre").textContent = productoElegido.vehiculo
+                ? productoElegido.nombre + " · " + productoElegido.vehiculo
+                : productoElegido.nombre;
             fila.querySelector(".detalle-cantidad-valor").textContent = cantidad;
             fila.querySelector(".detalle-precio-valor").textContent = "$" + precio.toFixed(2);
             actualizarSubtotalFila(fila);
@@ -244,7 +301,11 @@
             }
             var filaProducto = event.target.closest(".modal-producto__fila");
             if (filaProducto) {
-                elegirProductoDesdeModal(filaProducto.dataset.id, filaProducto.dataset.nombre);
+                elegirProductoDesdeModal(
+                    filaProducto.dataset.id,
+                    filaProducto.dataset.nombre,
+                    filaProducto.dataset.vehiculo
+                );
                 return;
             }
             if (event.target.closest("[data-agregar-linea]")) {

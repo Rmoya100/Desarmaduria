@@ -30,7 +30,7 @@
 </form>
 
 {% if ingresos %}
-<table>
+<table class="tabla-cards">
     <caption class="visually-hidden">Ingresos de inventario registrados</caption>
     <thead>
         <tr>
@@ -46,8 +46,8 @@
     <tbody>
         {% for ingreso in ingresos %}
         <tr>
-            <td>{{ ingreso.fecha }}</td>
-            <td>
+            <td data-label="Fecha">{{ ingreso.fecha }}</td>
+            <td data-label="Vehículo">
                 {% if ingreso.vehiculo %}
                     {{ ingreso.vehiculo.modelo.marca.nombre_marca }}
                     {{ ingreso.vehiculo.modelo.nombre_modelo }}
@@ -56,10 +56,10 @@
                     <span class="inventory-muted">Sin vehículo informado</span>
                 {% endif %}
             </td>
-            <td>{{ ingreso.vehiculo.tipo_vehiculo.nombre_tipo|default:"—" }}</td>
-            <td>{{ ingreso.piezas }}</td>
-            <td>{{ ingreso.unidades|default:0 }}</td>
-            <td>{{ ingreso.usuario }}</td>
+            <td data-label="Tipo">{{ ingreso.vehiculo.tipo_vehiculo.nombre_tipo|default:"—" }}</td>
+            <td data-label="Piezas">{{ ingreso.piezas }}</td>
+            <td data-label="Unidades">{{ ingreso.unidades|default:0 }}</td>
+            <td data-label="Usuario">{{ ingreso.usuario }}</td>
             <td class="table-actions">
                 <a href="{% url 'ingreso_detalle' ingreso.pk %}" class="btn" aria-label="Ver detalle del ingreso {{ ingreso.pk }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -95,7 +95,7 @@
     <tfoot>
         <tr>
             <td colspan="4"><strong>Total de unidades ingresadas</strong></td>
-            <td><strong>{{ total_unidades }}</strong></td>
+            <td data-label="Total de unidades"><strong>{{ total_unidades }}</strong></td>
             <td colspan="2"></td>
         </tr>
     </tfoot>

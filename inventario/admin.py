@@ -13,8 +13,10 @@ from .models import (
     Modelo,
     Permiso,
     Producto,
+    ProductoFoto,
     Rol,
     RolPermiso,
+    SaldoInicial,
     TipoDocumento,
     TipoVehiculo,
     Usuario,
@@ -31,6 +33,13 @@ class DetalleVentaInline(admin.TabularInline):
 class DetalleEntradaInline(admin.TabularInline):
     model = DetalleEntrada
     extra = 1
+
+
+class ProductoFotoInline(admin.TabularInline):
+    model = ProductoFoto
+    extra = 0
+    fields = ("imagen", "es_principal", "orden", "ancho_px", "alto_px", "peso_bytes")
+    readonly_fields = ("ancho_px", "alto_px", "peso_bytes")
 
 
 @admin.register(Usuario)
@@ -104,6 +113,7 @@ class ProductoAdmin(admin.ModelAdmin):
     )
     list_filter = ("categoria", "fecha_eliminacion")
     search_fields = ("nombre", "codigo")
+    inlines = [ProductoFotoInline]
 
 
 @admin.register(Venta)
@@ -124,6 +134,11 @@ class EntradaAdmin(admin.ModelAdmin):
 class GastoAdmin(admin.ModelAdmin):
     list_display = ("id_gasto", "concepto", "forma_pago", "fecha", "monto", "usuario")
     list_filter = ("fecha", "concepto", "forma_pago")
+
+
+@admin.register(SaldoInicial)
+class SaldoInicialAdmin(admin.ModelAdmin):
+    list_display = ("monto", "fecha", "usuario", "fecha_actualizacion")
 
 
 admin.site.register(

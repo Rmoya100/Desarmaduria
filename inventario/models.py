@@ -1,7 +1,10 @@
+from uuid import uuid4
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
 
 from .services import convertir_a_webp
 
@@ -300,6 +303,34 @@ class Producto(models.Model):
     class Meta:
         db_table = "producto"
 
+    @property
+    def foto_principal(self):
+        """Primera foto de la galeria marcada como principal.
+
+        Mientras convive con el campo `foto` original (ver migracion de
+        datos 0015), esto es lo que deben usar las plantillas en vez de
+        `producto.foto` directamente.
+
+        Si la vista ya trajo las fotos principales con `prefetch_related`
+        (ver `_filtrar_lista_productos`), se reusa ese resultado en vez de
+        lanzar una consulta nueva por producto listado (evita N+1).
+        """
+        prefetch = getattr(self, "_fotos_principales_prefetch", None)
+        if prefetch is not None:
+            return prefetch[0] if prefetch else None
+        return self.fotos.filter(es_principal=True).first()
+
+    @property
+    def descripcion_completa(self):
+        """Nombre + vehiculo (marca, modelo, anio) cuando el producto es
+        stock real de un vehiculo puntual; solo el nombre si es una
+        plantilla de catalogo. Se usa en Ventas para no confundir productos
+        con el mismo nombre que pertenecen a vehiculos distintos (una fila
+        Producto por vehiculo, ver docs/analisis_fotos_productos.md)."""
+        if self.vehiculo_id:
+            return f"{self.nombre} · {self.vehiculo}"
+        return self.nombre
+
     def eliminar(self, usuario):
         self.fecha_eliminacion = timezone.now()
         self.eliminado_por = usuario
@@ -319,7 +350,88 @@ class Producto(models.Model):
             super().save(update_fields=["codigo"])
 
     def __str__(self):
-        return self.nombre
+        return self.descripcion_completa
+
+
+def ruta_foto_producto(instance, filename):
+    """Ruta trazable a marca/modelo/categoria/producto sin consultar la BD:
+    productos/<vehiculo|catalogo>/<categoria>/<producto_id>/<uuid>.webp"""
+    producto = instance.producto
+    vehiculo_slug = str(producto.vehiculo_id) if producto.vehiculo_id else "catalogo"
+    categoria_slug = slugify(producto.categoria.nombre_categoria) or "sin-categoria"
+    return f"productos/{vehiculo_slug}/{categoria_slug}/{producto.id_producto}/{uuid4().hex}.webp"
+
+
+class ProductoFoto(models.Model):
+    """Una de N fotos de un `Producto` (galeria).
+
+    No se necesita una entidad intermedia entre `Vehiculo` y `Producto` para
+    esto: `Producto` ya identifica de forma unica la combinacion
+    Marca+Modelo+Anio+Categoria+Producto (ver analisis en
+    docs/analisis_fotos_productos.md), asi que la foto cuelga directo de el.
+    """
+
+    id_foto = models.AutoField(primary_key=True, db_column="idFoto")
+    producto = models.ForeignKey(
+        Producto, on_delete=models.CASCADE, db_column="idProducto", related_name="fotos"
+    )
+    imagen = models.ImageField(upload_to=ruta_foto_producto, db_column="imagen")
+    es_principal = models.BooleanField(default=False, db_column="esPrincipal")
+    orden = models.PositiveSmallIntegerField(default=0, db_column="orden")
+    ancho_px = models.PositiveSmallIntegerField(null=True, blank=True, db_column="anchoPx")
+    alto_px = models.PositiveSmallIntegerField(null=True, blank=True, db_column="altoPx")
+    peso_bytes = models.PositiveIntegerField(null=True, blank=True, db_column="pesoBytes")
+    creado_en = models.DateTimeField(auto_now_add=True, db_column="creadoEn")
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column="creadoPor",
+        related_name="fotos_producto_creadas",
+    )
+
+    class Meta:
+        db_table = "productoFoto"
+        ordering = ["orden", "id_foto"]
+        indexes = [
+            models.Index(fields=["producto", "es_principal"]),
+            models.Index(fields=["producto", "orden"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.imagen and not self.imagen.name.lower().endswith(".webp"):
+            self.imagen = convertir_a_webp(self.imagen)
+        if self.imagen:
+            self.peso_bytes = self.imagen.size
+            try:
+                self.ancho_px, self.alto_px = self.imagen.width, self.imagen.height
+            except Exception:
+                pass
+        es_la_primera_foto = not self.pk and not self.producto.fotos.exists()
+        if es_la_primera_foto:
+            self.es_principal = True
+        super().save(*args, **kwargs)
+        if self.es_principal:
+            # Garantiza una unica foto principal por producto (a nivel de
+            # aplicacion: MySQL no soporta indices unicos filtrados simples).
+            self.producto.fotos.exclude(pk=self.pk).update(es_principal=False)
+
+    def delete(self, *args, **kwargs):
+        producto = self.producto
+        era_principal = self.es_principal
+        super().delete(*args, **kwargs)
+        if era_principal:
+            # Si se borra la foto principal, la siguiente por orden la
+            # reemplaza automaticamente: siempre debe haber una principal
+            # mientras existan fotos.
+            siguiente = producto.fotos.order_by("orden", "id_foto").first()
+            if siguiente:
+                siguiente.es_principal = True
+                siguiente.save(update_fields=["es_principal"])
+
+    def __str__(self):
+        return f"Foto {self.id_foto} de {self.producto}"
 
 
 # ---------------------------------------------------------------------------
@@ -559,3 +671,37 @@ class Gasto(models.Model):
         if self.imagen and not self.imagen.name.lower().endswith(".webp"):
             self.imagen = convertir_a_webp(self.imagen)
         super().save(*args, **kwargs)
+
+
+class SaldoInicial(models.Model):
+    """Carga del saldo en caja al empezar a usar el sistema.
+
+    Es un dato de configuracion, no un movimiento: siempre hay una unica fila
+    (pk=1). El saldo en caja actual se calcula al vuelo (ver
+    reportes/queries.py) como este monto mas las ventas y menos los gastos
+    registrados desde `fecha` en adelante.
+    """
+
+    id_saldo_inicial = models.AutoField(primary_key=True, db_column="idSaldoInicial")
+    monto = models.DecimalField(max_digits=12, decimal_places=2, db_column="monto")
+    fecha = models.DateField(db_column="fecha")
+    observaciones = models.CharField(
+        max_length=200, null=True, blank=True, db_column="observaciones"
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column="idUsuario",
+        related_name="saldos_iniciales_editados",
+    )
+    fecha_actualizacion = models.DateTimeField(
+        auto_now=True, db_column="fechaActualizacion"
+    )
+
+    class Meta:
+        db_table = "saldoInicial"
+
+    def __str__(self):
+        return f"Saldo inicial: {self.monto} (desde {self.fecha})"

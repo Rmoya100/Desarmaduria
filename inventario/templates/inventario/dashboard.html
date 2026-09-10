@@ -126,13 +126,13 @@
         </div>
         <div class="panel-alert__body">
             {% if productos_stock_bajo %}
-            <table>
+            <table class="tabla-cards tabla-cards--plana">
                 <thead><tr><th>Producto</th><th>Stock</th></tr></thead>
                 <tbody>
                     {% for producto in productos_stock_bajo %}
                     <tr>
-                        <td>{{ producto.nombre }}</td>
-                        <td><span class="badge badge-warning">{{ producto.stock_disponible }}</span></td>
+                        <td data-label="Producto">{{ producto.nombre }}</td>
+                        <td data-label="Stock"><span class="badge badge-warning">{{ producto.stock_disponible }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -170,7 +170,7 @@
     <section class="panel">
         <h2>Ventas recientes</h2>
         {% if ventas_recientes %}
-        <table>
+        <table class="tabla-cards tabla-cards--plana">
             <thead>
                 <tr>
                     <th>Fecha</th>
@@ -182,10 +182,10 @@
             <tbody>
                 {% for v in ventas_recientes %}
                 <tr>
-                    <td>{{ v.fecha_venta }}</td>
-                    <td>{{ v.tipo_documento }}</td>
-                    <td>{{ v.forma_pago }}</td>
-                    <td>{{ v.usuario }}</td>
+                    <td data-label="Fecha">{{ v.fecha_venta }}</td>
+                    <td data-label="Documento">{{ v.tipo_documento }}</td>
+                    <td data-label="Forma de pago">{{ v.forma_pago }}</td>
+                    <td data-label="Registrado por">{{ v.usuario }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -198,7 +198,7 @@
     <section class="panel">
         <h2>Gastos recientes</h2>
         {% if gastos_recientes %}
-        <table>
+        <table class="tabla-cards tabla-cards--plana">
             <thead>
                 <tr>
                     <th>Fecha</th>
@@ -210,10 +210,10 @@
             <tbody>
                 {% for g in gastos_recientes %}
                 <tr>
-                    <td>{{ g.fecha }}</td>
-                    <td>{{ g.concepto }}</td>
-                    <td>{{ g.monto|clp }}</td>
-                    <td>{{ g.usuario }}</td>
+                    <td data-label="Fecha">{{ g.fecha }}</td>
+                    <td data-label="Concepto">{{ g.concepto }}</td>
+                    <td data-label="Monto">{{ g.monto|clp }}</td>
+                    <td data-label="Registrado por">{{ g.usuario }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

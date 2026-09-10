@@ -85,6 +85,13 @@ body {
     background: var(--color-page-bg);
 }
 
+/* Ultima red de seguridad: si algun contenido ancho se escapa igual, el
+   celular no queda con scroll lateral en toda la pagina. */
+html,
+body {
+    overflow-x: hidden;
+}
+
 ul {
     list-style: none;
     margin: 0;
@@ -296,6 +303,9 @@ button:focus-visible {
     padding: var(--spacing-4);
     max-width: 1400px;
     width: 100%;
+    /* Un item de grid tiene min-width:auto por defecto: sin esto una tabla
+       ancha estira la columna y desborda toda la pagina en vez de scrollear. */
+    min-width: 0;
     margin: 0 auto;
 }
 
@@ -403,6 +413,99 @@ button:focus-visible {
     .detalle-toolbar__input--corta,
     .detalle-toolbar__agregar {
         width: 100%;
+    }
+
+    .content {
+        padding: var(--spacing-3) var(--spacing-2);
+    }
+
+    /* Las tablas marcadas con .tabla-cards se apilan como tarjetas (ver el
+       bloque al final de este archivo). Las que no, siguen con su scroll
+       horizontal propio via .table-scroll. */
+
+    /* Por debajo de 16px Safari iOS hace zoom al enfocar un campo y deja la
+       pagina descuadrada. */
+    input,
+    select,
+    textarea,
+    .input-control {
+        font-size: 16px;
+    }
+
+    .btn,
+    select,
+    input:not([type="checkbox"]):not([type="radio"]) {
+        min-height: 44px;
+    }
+
+    /* Controles que ya tienen su propia caja y se descuadrarian al estirarse */
+    .btn-sm {
+        min-height: 36px;
+    }
+
+    .page-header,
+    .page-header--actions,
+    .table-panel__header,
+    .ingreso-piezas__acciones,
+    .panel-alert__header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    /* PDF + Excel + "Nueva venta" no entran en una linea de 375px */
+    .page-header__actions,
+    .table-actions {
+        flex-wrap: wrap;
+    }
+
+    .panel-alert__header {
+        align-items: flex-start;
+        gap: var(--spacing-1);
+    }
+
+    /* Las pestanas scrollean solas en vez de empujar el ancho de la pagina */
+    .subnav {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Cada filtro a lo ancho: dos campos de fecha lado a lado quedan
+       inusables una vez que el texto sube a 16px. */
+    .filter-bar .form-group {
+        flex: 1 1 100%;
+    }
+
+    .filter-bar__actions .btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-panel {
+        padding: var(--spacing-3) var(--spacing-2) var(--spacing-2);
+    }
+
+    .chart-panel__canvas-wrap {
+        height: 220px;
+    }
+
+    .comprobante__meta {
+        grid-template-columns: 1fr;
+    }
+
+    .form-card,
+    .form-card--ancho {
+        padding: var(--spacing-3);
+    }
+
+    .inventory-modal__dialog,
+    .inventory-modal__dialog--producto {
+        width: 100%;
+        max-height: 92vh;
+        border-radius: var(--radius) var(--radius) 0 0;
     }
 }
 
@@ -534,6 +637,11 @@ table {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
+}
+
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 th, td {
@@ -1590,6 +1698,153 @@ tfoot td {
 .chart-panel__canvas-wrap {
     position: relative;
     height: 260px;
+}
+
+/* ---------------------------------------------------------------------
+   Tablas como tarjetas en mobile
+
+   Una tabla de 6 o 7 columnas no entra en un celular: o se aplasta hasta
+   ser ilegible o obliga a arrastrar de lado en cada fila. Con .tabla-cards
+   cada fila pasa a ser una tarjeta y cada celda una linea "etiqueta: valor".
+   La etiqueta sale del atributo data-label de cada <td>, que replica el
+   texto de su <th> (el thead se oculta).
+
+   Solo se aplica a las tablas marcadas: las de captura (piezas del ingreso,
+   detalle de la venta) tienen su propio tratamiento porque son formularios,
+   no listados.
+--------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .tabla-cards,
+    .tabla-cards tbody,
+    .tabla-cards tfoot,
+    .tabla-cards tr,
+    .tabla-cards td {
+        display: block;
+        width: auto;
+    }
+
+    /* La tabla deja de ser la superficie visual: ahora lo es cada fila. */
+    .tabla-cards {
+        border: 0;
+        background: none;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    .tabla-cards thead {
+        display: none;
+    }
+
+    .tabla-cards tr {
+        margin-bottom: var(--spacing-3);
+        padding: var(--spacing-2) var(--spacing-3);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .tabla-cards td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--spacing-3);
+        padding: 6px 0;
+        border-bottom: 1px dashed var(--color-border);
+        text-align: right;
+    }
+
+    .tabla-cards td:last-child {
+        border-bottom: 0;
+    }
+
+    .tabla-cards td::before {
+        content: attr(data-label);
+        flex-shrink: 0;
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--color-text-muted);
+    }
+
+    /* Celdas de relleno del tfoot: sin contenido no aportan una linea. */
+    .tabla-cards td:empty {
+        display: none;
+    }
+
+    /* Los botones ocupan su propia franja al pie de la tarjeta */
+    .tabla-cards td.table-actions,
+    .tabla-cards td.table-actions-cell {
+        flex-wrap: wrap;
+        padding-top: var(--spacing-2);
+        white-space: normal;
+    }
+
+    .tabla-cards td.table-actions::before,
+    .tabla-cards td.table-actions-cell::before {
+        content: none;
+    }
+
+    .tabla-cards td.table-actions .btn,
+    .tabla-cards td.table-actions-cell .btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .tabla-cards tfoot tr {
+        background: var(--color-bg);
+        font-weight: 700;
+    }
+
+    /* En el tfoot la celda con colspan es solo el rotulo ("Total") de la
+       celda que sigue; apilada quedaria repetida sobre su propio data-label. */
+    .tabla-cards tfoot td[colspan] {
+        display: none;
+    }
+
+    /* La fila de "no hay resultados" ocupa la tarjeta entera, sin etiqueta. */
+    .tabla-cards td.empty-state {
+        display: block;
+        text-align: center;
+    }
+
+    .tabla-cards td.empty-state::before {
+        content: none;
+    }
+
+    /* El panel ya aporta el marco en escritorio; con tarjetas estorba. */
+    .table-panel:has(.tabla-cards) {
+        background: none;
+        border: 0;
+        box-shadow: none;
+    }
+
+    .table-panel:has(.tabla-cards) .table-scroll {
+        overflow-x: visible;
+    }
+
+    /* Variante para tablas que ya viven dentro de un panel (dashboard,
+       reportes): sin marco propio, para no anidar dos tarjetas. */
+    .tabla-cards--plana tr {
+        margin-bottom: 0;
+        padding: var(--spacing-2) 0;
+        background: none;
+        border: 0;
+        border-bottom: 1px solid var(--color-border);
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .tabla-cards--plana tr:last-child {
+        border-bottom: 0;
+    }
+
+    .tabla-cards--plana td {
+        border-bottom: 0;
+        padding: 3px 0;
+    }
 }
 
 /* ---------------------------------------------------------------------

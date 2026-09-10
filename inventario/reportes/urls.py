@@ -14,4 +14,9 @@ urlpatterns = [
     path("rotacion/", views.rotacion, name="reporte_rotacion"),
     path("rotacion/exportar/pdf/", views.rotacion_exportar_pdf, name="reporte_rotacion_pdf"),
     path("rotacion/exportar/excel/", views.rotacion_exportar_excel, name="reporte_rotacion_excel"),
+
+    path("caja/", views.caja, name="reporte_caja"),
+    path("caja/exportar/pdf/", views.caja_exportar_pdf, name="reporte_caja_pdf"),
+    path("caja/exportar/excel/", views.caja_exportar_excel, name="reporte_caja_excel"),
+    path("caja/saldo-inicial/", views.saldo_inicial_editar, name="saldo_inicial_editar"),
 ]

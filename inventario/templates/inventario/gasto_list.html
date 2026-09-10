@@ -46,7 +46,7 @@
 </form>
 
 {% if gastos %}
-<table>
+<table class="tabla-cards">
     <thead>
         <tr>
             <th>Fecha</th>
@@ -62,18 +62,18 @@
     <tbody>
         {% for gasto in gastos %}
         <tr>
-            <td>{{ gasto.fecha }}</td>
-            <td>{{ gasto.concepto }}</td>
-            <td>{{ gasto.forma_pago }}</td>
-            <td>${{ gasto.monto }}</td>
-            <td>
+            <td data-label="Fecha">{{ gasto.fecha }}</td>
+            <td data-label="Concepto">{{ gasto.concepto }}</td>
+            <td data-label="Forma de pago">{{ gasto.forma_pago }}</td>
+            <td data-label="Monto">${{ gasto.monto }}</td>
+            <td data-label="Documento">
                 {% if gasto.tipo_documento %}
                 {{ gasto.tipo_documento }}{% if gasto.numero_documento %} · {{ gasto.numero_documento }}{% endif %}
                 {% else %}
                 —
                 {% endif %}
             </td>
-            <td>
+            <td data-label="Comprobante">
                 {% if gasto.imagen %}
                 <a href="{% url 'gasto_comprobante' gasto.pk %}" class="thumbnail-link" aria-label="Ver comprobante adjunto">
                     <img src="{{ gasto.imagen.url }}" alt="" class="thumbnail">
@@ -82,7 +82,7 @@
                 —
                 {% endif %}
             </td>
-            <td>{{ gasto.usuario }}</td>
+            <td data-label="Usuario">{{ gasto.usuario }}</td>
             <td class="table-actions">
                 <a href="{% url 'gasto_comprobante' gasto.pk %}" class="btn" aria-label="Ver comprobante">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -114,7 +114,7 @@
     <tfoot>
         <tr>
             <td colspan="3"><strong>Total</strong></td>
-            <td><strong>${{ total }}</strong></td>
+            <td data-label="Total"><strong>${{ total }}</strong></td>
             <td colspan="4"></td>
         </tr>
     </tfoot>
