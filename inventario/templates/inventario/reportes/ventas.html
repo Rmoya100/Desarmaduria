@@ -55,13 +55,13 @@
     <section class="panel">
         <h2>Por forma de pago</h2>
         {% if por_forma_pago %}
-        <table>
+        <table class="tabla-cards tabla-cards--plana">
             <thead><tr><th>Forma de pago</th><th>Total</th></tr></thead>
             <tbody>
                 {% for fila in por_forma_pago %}
                 <tr>
-                    <td>{{ fila.venta__forma_pago__forma_pago }}</td>
-                    <td>{{ fila.total|clp }}</td>
+                    <td data-label="Forma de pago">{{ fila.venta__forma_pago__forma_pago }}</td>
+                    <td data-label="Total">{{ fila.total|clp }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -74,13 +74,13 @@
     <section class="panel">
         <h2>Por tipo de documento</h2>
         {% if por_tipo_documento %}
-        <table>
+        <table class="tabla-cards tabla-cards--plana">
             <thead><tr><th>Documento</th><th>Total</th></tr></thead>
             <tbody>
                 {% for fila in por_tipo_documento %}
                 <tr>
-                    <td>{{ fila.venta__tipo_documento__tipo_documento }}</td>
-                    <td>{{ fila.total|clp }}</td>
+                    <td data-label="Documento">{{ fila.venta__tipo_documento__tipo_documento }}</td>
+                    <td data-label="Total">{{ fila.total|clp }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -92,7 +92,7 @@
 </div>
 
 {% if ventas %}
-<table>
+<table class="tabla-cards">
     <thead>
         <tr>
             <th>Fecha</th>
@@ -105,18 +105,18 @@
     <tbody>
         {% for venta in ventas %}
         <tr>
-            <td>{{ venta.fecha_venta }}</td>
-            <td>{{ venta.tipo_documento }}</td>
-            <td>{{ venta.forma_pago }}</td>
-            <td>{{ venta.usuario }}</td>
-            <td>{{ venta.total_venta|clp }}</td>
+            <td data-label="Fecha">{{ venta.fecha_venta }}</td>
+            <td data-label="Documento">{{ venta.tipo_documento }}</td>
+            <td data-label="Forma de pago">{{ venta.forma_pago }}</td>
+            <td data-label="Usuario">{{ venta.usuario }}</td>
+            <td data-label="Total">{{ venta.total_venta|clp }}</td>
         </tr>
         {% endfor %}
     </tbody>
     <tfoot>
         <tr>
             <td colspan="4"><strong>Total</strong></td>
-            <td><strong>{{ total_general|clp }}</strong></td>
+            <td data-label="Total"><strong>{{ total_general|clp }}</strong></td>
         </tr>
     </tfoot>
 </table>

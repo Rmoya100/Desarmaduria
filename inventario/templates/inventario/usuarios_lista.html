@@ -13,7 +13,7 @@
 {% include "inventario/_config_tabs.html" with seccion_activa="usuarios" %}
 
 {% if usuarios %}
-<table>
+<table class="tabla-cards">
     <thead>
         <tr>
             <th>Usuario</th>
@@ -27,11 +27,11 @@
     <tbody>
         {% for u in usuarios %}
         <tr>
-            <td>{{ u.username }}</td>
-            <td>{{ u.nombre_usuario }}</td>
-            <td>{{ u.email }}</td>
-            <td>{{ u.rol|default:"—" }}</td>
-            <td>
+            <td data-label="Usuario">{{ u.username }}</td>
+            <td data-label="Nombre">{{ u.nombre_usuario }}</td>
+            <td data-label="Email">{{ u.email }}</td>
+            <td data-label="Rol">{{ u.rol|default:"—" }}</td>
+            <td data-label="Estado">
                 {% if u.is_active %}
                 <span class="badge badge-success">Activo</span>
                 {% else %}

@@ -39,7 +39,6 @@ ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if os.envi
 ) else []
 
 
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',

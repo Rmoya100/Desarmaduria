@@ -46,7 +46,7 @@
 </form>
 
 {% if ventas %}
-<table>
+<table class="tabla-cards">
     <thead>
         <tr>
             <th>Fecha</th>
@@ -61,12 +61,12 @@
     <tbody>
         {% for venta in ventas %}
         <tr>
-            <td>{{ venta.fecha_venta }}</td>
-            <td>{{ venta.tipo_documento }}</td>
-            <td>{{ venta.forma_pago }}</td>
-            <td>{{ venta.usuario }}</td>
-            <td>{{ venta.detalles.all|length }}</td>
-            <td>${{ venta.total_venta }}</td>
+            <td data-label="Fecha">{{ venta.fecha_venta }}</td>
+            <td data-label="Documento">{{ venta.tipo_documento }}</td>
+            <td data-label="Forma de pago">{{ venta.forma_pago }}</td>
+            <td data-label="Usuario">{{ venta.usuario }}</td>
+            <td data-label="N.° productos">{{ venta.detalles.all|length }}</td>
+            <td data-label="Total">${{ venta.total_venta }}</td>
             <td class="table-actions">
                 <a href="{% url 'venta_comprobante' venta.pk %}" class="btn" aria-label="Ver comprobante">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -103,7 +103,7 @@
         <tr>
             <td colspan="4"><strong>Total</strong></td>
             <td></td>
-            <td><strong>${{ total }}</strong></td>
+            <td data-label="Total"><strong>${{ total }}</strong></td>
             <td></td>
         </tr>
     </tfoot>

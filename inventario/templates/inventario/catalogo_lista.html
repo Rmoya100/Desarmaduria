@@ -13,7 +13,7 @@
 {% include "inventario/_config_tabs.html" with seccion_activa=clave %}
 
 {% if items %}
-<table>
+<table class="tabla-cards">
     <thead>
         <tr>
             <th>{{ cfg.titulo_singular|capfirst }}</th>
@@ -23,7 +23,7 @@
     <tbody>
         {% for item in items %}
         <tr>
-            <td>{{ item }}</td>
+            <td data-label="{{ cfg.titulo_singular|capfirst }}">{{ item }}</td>
             {% if puede_editar or puede_eliminar %}
             <td class="table-actions">
                 {% if puede_editar %}

@@ -46,7 +46,7 @@
     <section class="panel">
         <h2>Más vendidos</h2>
         {% if mas_vendidos %}
-        <table>
+        <table class="tabla-cards tabla-cards--plana">
             <thead>
                 <tr>
                     <th>Producto</th>
@@ -57,9 +57,9 @@
             <tbody>
                 {% for producto in mas_vendidos %}
                 <tr>
-                    <td>{{ producto.descripcion_completa }}</td>
-                    <td>{{ producto.categoria }}</td>
-                    <td>{{ producto.cantidad_vendida }}</td>
+                    <td data-label="Producto">{{ producto.descripcion_completa }}</td>
+                    <td data-label="Categoría">{{ producto.categoria }}</td>
+                    <td data-label="Cantidad vendida">{{ producto.cantidad_vendida }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -72,7 +72,7 @@
     <section class="panel">
         <h2>Menos vendidos</h2>
         {% if menos_vendidos %}
-        <table>
+        <table class="tabla-cards tabla-cards--plana">
             <thead>
                 <tr>
                     <th>Producto</th>
@@ -83,9 +83,9 @@
             <tbody>
                 {% for producto in menos_vendidos %}
                 <tr>
-                    <td>{{ producto.descripcion_completa }}</td>
-                    <td>{{ producto.categoria }}</td>
-                    <td>
+                    <td data-label="Producto">{{ producto.descripcion_completa }}</td>
+                    <td data-label="Categoría">{{ producto.categoria }}</td>
+                    <td data-label="Cantidad vendida">
                         <span class="badge {% if producto.cantidad_vendida <= 0 %}badge-danger{% else %}badge-warning{% endif %}">
                             {{ producto.cantidad_vendida }}
                         </span>

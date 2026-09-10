@@ -11,7 +11,7 @@
 {% include "inventario/_gastos_subnav.html" %}
 
 {% if conceptos %}
-<table>
+<table class="tabla-cards">
     <thead>
         <tr>
             <th>Nombre</th>
@@ -21,7 +21,7 @@
     <tbody>
         {% for concepto in conceptos %}
         <tr>
-            <td>{{ concepto.nombre_gasto }}</td>
+            <td data-label="Nombre">{{ concepto.nombre_gasto }}</td>
             <td class="table-actions">
                 <a href="{% url 'concepto_editar' concepto.pk %}" class="btn" aria-label="Editar">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

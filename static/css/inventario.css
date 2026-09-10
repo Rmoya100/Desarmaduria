@@ -118,7 +118,6 @@
 .table-panel__header > span { color: var(--color-text-muted); font-size: 0.83rem; }
 .table-panel__header > div { min-width: 0; }
 .table-count { margin: 4px 0 0; color: var(--color-text-muted); font-size: 0.83rem; }
-.table-scroll { overflow-x: auto; }
 .data-table { border: 0; border-radius: 0; box-shadow: none; }
 .data-table th { white-space: nowrap; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .data-table td { font-size: 0.88rem; }
@@ -364,12 +363,123 @@
 .ingreso-tabla__cantidad { width: 140px; text-align: right; }
 .ingreso-tabla__cantidad .input-control { width: 90px; text-align: right; }
 
-.ingreso-tabla__foto { width: 48px; text-align: center; }
+.ingreso-tabla__foto { width: 92px; text-align: center; white-space: nowrap; }
 .ingreso-tabla__foto .btn { padding: 2px 8px; }
 .ingreso-tabla__foto [data-foto-abrir].is-adjunta {
     background: var(--color-success-bg);
     color: var(--color-success);
     border-color: var(--color-success);
+}
+
+.foto-boton svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+.foto-preview:empty { display: none; }
+.foto-preview {
+    position: relative;
+    display: inline-block;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.foto-preview img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    display: block;
+}
+
+.foto-preview__quitar {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    line-height: 1;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    background: var(--color-surface);
+    color: var(--color-danger);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* Hoja de acciones para elegir camara o galeria. En el celular sube desde
+   abajo (donde llega el pulgar); en escritorio se centra como dialogo. */
+.foto-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+}
+
+.foto-sheet__fondo {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.foto-sheet--abierta .foto-sheet__fondo { opacity: 1; }
+
+.foto-sheet__panel {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3);
+    padding-bottom: calc(var(--spacing-3) + env(safe-area-inset-bottom));
+    background: var(--color-surface);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(100%);
+    transition: transform 0.2s ease;
+}
+
+.foto-sheet--abierta .foto-sheet__panel { transform: translateY(0); }
+
+.foto-sheet__titulo {
+    margin: 0 0 var(--spacing-1);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
+
+.foto-sheet__opcion {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--spacing-2);
+    min-height: 48px;
+    font-size: 1rem;
+}
+
+.foto-sheet__opcion svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+.foto-sheet__cancelar { min-height: 44px; }
+
+@media (min-width: 769px) {
+    .foto-sheet__panel {
+        inset: 50% auto auto 50%;
+        width: min(340px, calc(100% - 32px));
+        transform: translate(-50%, -50%) scale(0.96);
+        border-radius: var(--radius-lg);
+    }
+    .foto-sheet--abierta .foto-sheet__panel {
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .foto-sheet__fondo,
+    .foto-sheet__panel { transition: none; }
 }
 
 .ingreso-grupo th {
@@ -382,6 +492,80 @@
 
 .ingreso-tabla tbody[hidden] { display: none; }
 .ingreso-tabla tr[hidden] { display: none; }
+
+/* ---------------------------------------------------------------------
+   Tabla de piezas en mobile
+
+   No usa el patron generico .tabla-cards de base.css: aca no se lee una
+   ficha, se captura. Lo que importa es que el nombre completo de la pieza
+   se lea de un vistazo y que el campo de cantidad y la camara queden
+   juntos abajo, donde llega el pulgar. Por eso cada fila es un flex de
+   dos lineas en vez de una lista "etiqueta: valor".
+--------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    /* Sin esto quedan dos scrollers anidados y el panel recorta mal. */
+    .table-panel .table-scroll:has(.ingreso-tabla) { overflow-x: visible; }
+
+    .ingreso-tabla,
+    .ingreso-tabla tbody { display: block; }
+    .ingreso-tabla thead { display: none; }
+
+    /* Banda de categoria: separa los grupos al desplazarse. El sticky
+       original no funciona fuera de un contenedor con scroll propio. */
+    .ingreso-tabla .ingreso-grupo,
+    .ingreso-tabla .ingreso-grupo th {
+        display: block;
+        position: static;
+    }
+
+    .ingreso-tabla .ingreso-grupo th {
+        padding: var(--spacing-2) var(--spacing-3);
+    }
+
+    /* :not([hidden]) no es decorativo: sin el, este selector le gana en
+       especificidad a `.ingreso-tabla tr[hidden]` y las filas que el
+       buscador filtra volverian a aparecer. */
+    .ingreso-tabla tbody tr:not(.ingreso-grupo):not([hidden]) {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--spacing-2);
+        padding: var(--spacing-2) var(--spacing-3);
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .ingreso-tabla tbody tr:not(.ingreso-grupo) > td {
+        border: 0;
+        padding: 0;
+    }
+
+    /* Nombre de la pieza: linea propia y se parte si es largo. */
+    .ingreso-tabla tbody tr:not(.ingreso-grupo) > td:first-child {
+        flex: 1 1 100%;
+        font-weight: 600;
+        white-space: normal;
+    }
+
+    /* Cantidad a la izquierda, camara pegada al borde derecho. */
+    .ingreso-tabla__cantidad {
+        width: auto;
+        margin-right: auto;
+        text-align: left;
+    }
+
+    .ingreso-tabla__foto { width: auto; }
+
+    /* El buscador de piezas se queda encogido a su ancho intrinseco. */
+    .ingreso-piezas__acciones .filter-field { flex: 1; }
+
+    /* El overlay aporta 20px y el dialogo 26px mas: de 375px quedaban 283
+       utiles. Anclado abajo se abre como hoja, igual que el de la camara. */
+    .inventory-modal { padding: 0; align-items: flex-end; }
+    .inventory-modal__dialog { padding: var(--spacing-3); }
+    /* dvh y no vh: con el teclado abierto vh no se achica y la lista queda
+       debajo del teclado. */
+    .modal-piezas-lista { max-height: 50dvh; }
+}
 
 .ingreso-resumen {
     display: flex;
@@ -490,6 +674,10 @@
     .ingreso-ficha { grid-template-columns: 1fr; }
     .ingreso-piezas__acciones { width: 100%; }
     .ingreso-resumen { align-items: stretch; flex-direction: column; }
+    /* Los 140px fijos le robaban ancho a la columna de foto en pantallas
+       angostas y empujaban la tabla al scroll horizontal. */
+    .ingreso-tabla__cantidad { width: auto; }
+    .ingreso-tabla__cantidad .input-control { width: 70px; }
 }
 
 .table-panel__acciones {
@@ -575,6 +763,18 @@
     flex-wrap: wrap;
     gap: var(--spacing-2);
     margin-top: 6px;
+}
+
+.foto-input__botones .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.foto-input__botones .btn svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
 }
 
 .foto-input__resumen {

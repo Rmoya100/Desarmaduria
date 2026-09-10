@@ -193,15 +193,102 @@
         var tieneArchivo = input.files && input.files.length > 0;
         boton.classList.toggle("is-adjunta", tieneArchivo);
         boton.title = tieneArchivo ? "Foto adjunta: " + input.files[0].name : "Adjuntar foto";
+        dibujarMiniatura(celda, tieneArchivo ? input.files[0] : null);
+    }
+
+    function dibujarMiniatura(celda, archivo) {
+        var contenedor = celda.querySelector("[data-foto-preview]");
+        if (!contenedor) return;
+        var previa = contenedor.querySelector("img");
+        // Sin revoke, cada foto reemplazada deja su blob vivo hasta recargar.
+        if (previa) URL.revokeObjectURL(previa.src);
+        contenedor.textContent = "";
+        if (!archivo) return;
+
+        var imagen = document.createElement("img");
+        imagen.src = URL.createObjectURL(archivo);
+        imagen.alt = "Vista previa de la foto";
+        var quitar = document.createElement("button");
+        quitar.type = "button";
+        quitar.className = "foto-preview__quitar";
+        quitar.setAttribute("data-foto-quitar", "");
+        quitar.setAttribute("aria-label", "Quitar foto");
+        quitar.textContent = "×";
+        contenedor.appendChild(imagen);
+        contenedor.appendChild(quitar);
+    }
+
+    // --- Hoja "Tomar foto / Elegir de galeria" ----------------------------
+    // El atributo `capture` se ajusta antes de disparar el input: con
+    // capture=environment el celular abre la camara trasera directo; sin el,
+    // muestra el selector del sistema (que incluye la galeria).
+    var hoja = formulario.querySelector("[data-foto-sheet]");
+    var hojaTitulo = hoja && hoja.querySelector("[data-foto-sheet-titulo]");
+    var celdaFotoActiva = null;
+
+    function abrirHoja(boton) {
+        celdaFotoActiva = boton.closest("td");
+        if (hojaTitulo) {
+            hojaTitulo.textContent =
+                "Foto de " + (boton.getAttribute("data-pieza-nombre") || "la pieza");
+        }
+        hoja.hidden = false;
+        // Un frame de espera para que la transicion de entrada se vea.
+        requestAnimationFrame(function () {
+            hoja.classList.add("foto-sheet--abierta");
+        });
+    }
+
+    function cerrarHoja() {
+        hoja.classList.remove("foto-sheet--abierta");
+        hoja.hidden = true;
+        celdaFotoActiva = null;
     }
 
     panel.addEventListener("click", function (evento) {
+        var quitar = evento.target.closest("[data-foto-quitar]");
+        if (quitar) {
+            var celdaQuitar = quitar.closest("td");
+            var inputQuitar = celdaQuitar.querySelector("[data-foto-input]");
+            inputQuitar.value = "";
+            actualizarBotonFoto(inputQuitar);
+            return;
+        }
+
         var boton = evento.target.closest("[data-foto-abrir]");
         if (!boton) return;
-        var celda = boton.closest("td");
-        var input = celda && celda.querySelector("[data-foto-input]");
+        if (hoja) {
+            abrirHoja(boton);
+            return;
+        }
+        // Sin la hoja en el DOM, el boton sigue abriendo el selector del sistema.
+        var input = boton.closest("td").querySelector("[data-foto-input]");
         if (input) input.click();
     });
+
+    if (hoja) {
+        hoja.addEventListener("click", function (evento) {
+            if (evento.target.closest("[data-foto-sheet-cerrar]")) {
+                cerrarHoja();
+                return;
+            }
+            var opcion = evento.target.closest("[data-foto-modo]");
+            if (!opcion || !celdaFotoActiva) return;
+            var input = celdaFotoActiva.querySelector("[data-foto-input]");
+            cerrarHoja();
+            if (!input) return;
+            if (opcion.getAttribute("data-foto-modo") === "camara") {
+                input.setAttribute("capture", "environment");
+            } else {
+                input.removeAttribute("capture");
+            }
+            input.click();
+        });
+
+        document.addEventListener("keydown", function (evento) {
+            if (evento.key === "Escape" && !hoja.hidden) cerrarHoja();
+        });
+    }
 
     formulario.addEventListener("submit", function () {
         // Son dos: el de la cabecera (asociado por el atributo `form`) y el
