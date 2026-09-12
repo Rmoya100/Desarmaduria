@@ -9,10 +9,17 @@ from openpyxl.styles import Font
 
 from ..forms import SaldoInicialForm
 from ..models import SaldoInicial
-from ..pdf import caja_pdf_bytes, rotacion_pdf_bytes, utilidad_pdf_bytes, ventas_pdf_bytes
+from ..pdf import (
+    caja_pdf_bytes,
+    rotacion_pdf_bytes,
+    utilidad_pdf_bytes,
+    ventas_pdf_bytes,
+    vehiculos_pdf_bytes,
+)
 from .queries import (
     rango_desde_hasta,
     reporte_caja,
+    reporte_ingresos_vehiculo,
     reporte_rotacion,
     reporte_utilidad,
     reporte_ventas,
@@ -71,6 +78,18 @@ def ventas_exportar_excel(request):
     for columna, ancho in {"A": 12, "B": 16, "C": 16, "D": 16, "E": 14}.items():
         ws.column_dimensions[columna].width = ancho
 
+    fila_resumen = fila_total + 2
+    resumen = [
+        ("Efectivo", datos["total_efectivo"]),
+        ("Transferencia y tarjeta (IVA incluido)", datos["total_transferencia_tarjeta"]),
+        ("IVA recaudado", datos["total_iva"]),
+    ]
+    for etiqueta, valor in resumen:
+        ws.cell(row=fila_resumen, column=1, value=etiqueta).font = Font(bold=True)
+        celda_valor = ws.cell(row=fila_resumen, column=2, value=valor)
+        celda_valor.number_format = "#,##0"
+        fila_resumen += 1
+
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
@@ -109,13 +128,13 @@ def utilidad_exportar_excel(request):
     wb = Workbook()
     ws = wb.active
     ws.title = "Utilidad"
-    ws.append(["Mes", "Ventas", "Gastos", "Utilidad"])
+    ws.append(["Período", "Ventas", "Gastos", "Utilidad"])
     for celda in ws[1]:
         celda.font = Font(bold=True)
     for fila in datos["filas"]:
         ws.append(
             [
-                fila["mes"].strftime("%m-%Y"),
+                fila["etiqueta"],
                 fila["ventas"],
                 fila["gastos"],
                 fila["utilidad"],
@@ -170,13 +189,13 @@ def caja_exportar_excel(request):
     wb = Workbook()
     ws = wb.active
     ws.title = "Flujo de caja"
-    ws.append(["Mes", "Ventas", "Gastos", "Utilidad", "Saldo acumulado"])
+    ws.append(["Período", "Ventas", "Gastos", "Utilidad", "Saldo acumulado"])
     for celda in ws[1]:
         celda.font = Font(bold=True)
     for fila in datos["filas"]:
         ws.append(
             [
-                fila["mes"].strftime("%m-%Y"),
+                fila["etiqueta"],
                 fila["ventas"],
                 fila["gastos"],
                 fila["utilidad"],
@@ -281,5 +300,65 @@ def rotacion_exportar_excel(request):
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     response["Content-Disposition"] = 'attachment; filename="reporte_rotacion.xlsx"'
+    wb.save(response)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Ingresos por vehiculo
+# ---------------------------------------------------------------------------
+@login_required
+def vehiculos(request):
+    desde, hasta = rango_desde_hasta(request)
+    datos = reporte_ingresos_vehiculo(desde, hasta)
+    contexto = {
+        **datos,
+        "desde": desde,
+        "hasta": hasta,
+        "grafico_vehiculos": {
+            "etiquetas": [v["descripcion"] for v in datos["vehiculos"]],
+            "valores": [float(v["total"]) for v in datos["vehiculos"]],
+        },
+    }
+    return render(request, "inventario/reportes/vehiculos.html", contexto)
+
+
+@login_required
+def vehiculos_exportar_pdf(request):
+    desde, hasta = rango_desde_hasta(request)
+    datos = reporte_ingresos_vehiculo(desde, hasta, limite=None)
+    response = HttpResponse(
+        vehiculos_pdf_bytes(datos, desde, hasta), content_type="application/pdf"
+    )
+    response["Content-Disposition"] = 'attachment; filename="reporte_ingresos_vehiculo.pdf"'
+    return response
+
+
+@login_required
+def vehiculos_exportar_excel(request):
+    desde, hasta = rango_desde_hasta(request)
+    datos = reporte_ingresos_vehiculo(desde, hasta, limite=None)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Ingresos por vehículo"
+    ws.append(["Vehículo", "Unidades vendidas", "Total generado"])
+    for celda in ws[1]:
+        celda.font = Font(bold=True)
+    for vehiculo in datos["vehiculos"]:
+        ws.append([vehiculo["descripcion"], vehiculo["unidades"], vehiculo["total"]])
+    fila_total = ws.max_row + 1
+    ws.cell(row=fila_total, column=1, value="Total").font = Font(bold=True)
+    ws.cell(row=fila_total, column=3, value=datos["total_general"]).font = Font(bold=True)
+    for fila in ws.iter_rows(min_row=2, min_col=3, max_col=3):
+        for celda in fila:
+            celda.number_format = "#,##0"
+    for columna, ancho in {"A": 30, "B": 18, "C": 18}.items():
+        ws.column_dimensions[columna].width = ancho
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="reporte_ingresos_vehiculo.xlsx"'
     wb.save(response)
     return response

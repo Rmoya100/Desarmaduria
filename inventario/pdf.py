@@ -269,13 +269,13 @@ def ventas_pdf_bytes(datos, desde, hasta):
 
 
 def utilidad_pdf_bytes(datos, desde, hasta):
-    """PDF con la utilidad (ventas - gastos) mes a mes del rango."""
-    encabezados = ["Mes", "Ventas", "Gastos", "Utilidad"]
+    """PDF con la utilidad (ventas - gastos) por periodo del rango."""
+    encabezados = ["Período", "Ventas", "Gastos", "Utilidad"]
     filas = [encabezados]
     for fila in datos["filas"]:
         filas.append(
             [
-                fila["mes"].strftime("%B %Y").capitalize(),
+                fila["etiqueta"],
                 formato_monto(fila["ventas"]),
                 formato_monto(fila["gastos"]),
                 formato_monto(fila["utilidad"]),
@@ -328,7 +328,7 @@ def utilidad_pdf_bytes(datos, desde, hasta):
     )
     doc.build(
         [
-            _encabezado("Utilidad por mes", generado_en),
+            _encabezado("Utilidad por período", generado_en),
             Spacer(1, 10),
             subtitulo,
             Spacer(1, 10),
@@ -388,12 +388,12 @@ def caja_pdf_bytes(datos, desde, hasta):
         )
     )
 
-    encabezados = ["Mes", "Ventas", "Gastos", "Utilidad", "Saldo acumulado"]
+    encabezados = ["Período", "Ventas", "Gastos", "Utilidad", "Saldo acumulado"]
     filas = [encabezados]
     for fila in datos["filas"]:
         filas.append(
             [
-                fila["mes"].strftime("%B %Y").capitalize(),
+                fila["etiqueta"],
                 formato_monto(fila["ventas"]),
                 formato_monto(fila["gastos"]),
                 formato_monto(fila["utilidad"]),
@@ -528,6 +528,65 @@ def rotacion_pdf_bytes(datos, desde, hasta):
         rightMargin=1.8 * cm,
     )
     doc.build(contenido)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def vehiculos_pdf_bytes(datos, desde, hasta):
+    """PDF con el total generado por cada vehiculo (todas las piezas que
+    tienen un vehiculo de origen asociado, vendidas en el rango)."""
+    encabezados = ["Vehículo", "Unidades vendidas", "Total generado"]
+    filas = [encabezados]
+    for vehiculo in datos["vehiculos"]:
+        filas.append([vehiculo["descripcion"], str(vehiculo["unidades"]), formato_monto(vehiculo["total"])])
+    filas.append(["Total", "", formato_monto(datos["total_general"])])
+
+    proporciones = [0.5, 0.25, 0.25]
+    anchos_columnas = [ANCHO_PAGINA_COMPROBANTE * p for p in proporciones]
+    tabla = Table(filas, colWidths=anchos_columnas, repeatRows=1)
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    estilos = getSampleStyleSheet()
+    subtitulo = Paragraph(
+        _rango_legible(desde, hasta),
+        ParagraphStyle("Rango", parent=estilos["Normal"], textColor=COLOR_TEXTO_MUTED),
+    )
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title="Ingresos por vehículo",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+    )
+    doc.build(
+        [
+            _encabezado("Ingresos por vehículo", generado_en),
+            Spacer(1, 10),
+            subtitulo,
+            Spacer(1, 10),
+            tabla,
+        ]
+    )
     buffer.seek(0)
     return buffer.getvalue()
 

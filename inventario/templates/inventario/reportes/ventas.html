@@ -49,6 +49,19 @@
         <span class="stat-card__value">{{ total_general|clp }}</span>
         <span class="stat-card__meta">{{ cantidad_ventas }} venta{{ cantidad_ventas|pluralize }}</span>
     </div>
+    <div class="stat-card">
+        <span class="stat-card__label">Efectivo</span>
+        <span class="stat-card__value">{{ total_efectivo|clp }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-card__label">Transferencia y tarjeta</span>
+        <span class="stat-card__value">{{ total_transferencia_tarjeta|clp }}</span>
+        <span class="stat-card__meta">IVA incluido</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-card__label">IVA recaudado</span>
+        <span class="stat-card__value">{{ total_iva|clp }}</span>
+    </div>
 </div>
 
 <div class="dashboard-grid">
@@ -56,12 +69,13 @@
         <h2>Por forma de pago</h2>
         {% if por_forma_pago %}
         <table class="tabla-cards tabla-cards--plana">
-            <thead><tr><th>Forma de pago</th><th>Total</th></tr></thead>
+            <thead><tr><th>Forma de pago</th><th>Total</th><th>IVA</th></tr></thead>
             <tbody>
                 {% for fila in por_forma_pago %}
                 <tr>
-                    <td data-label="Forma de pago">{{ fila.venta__forma_pago__forma_pago }}</td>
+                    <td data-label="Forma de pago">{{ fila.forma_pago__forma_pago }}</td>
                     <td data-label="Total">{{ fila.total|clp }}</td>
+                    <td data-label="IVA">{% if fila.iva %}{{ fila.iva|clp }}{% else %}—{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -79,7 +93,7 @@
             <tbody>
                 {% for fila in por_tipo_documento %}
                 <tr>
-                    <td data-label="Documento">{{ fila.venta__tipo_documento__tipo_documento }}</td>
+                    <td data-label="Documento">{{ fila.tipo_documento__tipo_documento }}</td>
                     <td data-label="Total">{{ fila.total|clp }}</td>
                 </tr>
                 {% endfor %}

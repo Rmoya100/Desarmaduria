@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% load monedas %}
 
-{% block title %}Utilidad por mes · Desarmaduría{% endblock %}
+{% block title %}Utilidad por período · Desarmaduría{% endblock %}
 
 {% block content %}
 <div class="page-header page-header--actions">
-    <h1>Utilidad por mes</h1>
+    <h1>Utilidad por período</h1>
     <div class="page-header__actions">
         <a href="{% url 'reporte_utilidad_pdf' %}?desde={{ desde }}&hasta={{ hasta }}" class="btn btn-pdf">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -63,7 +63,7 @@
 <table class="tabla-cards">
     <thead>
         <tr>
-            <th>Mes</th>
+            <th>Período</th>
             <th>Ventas</th>
             <th>Gastos</th>
             <th>Utilidad</th>
@@ -72,7 +72,7 @@
     <tbody>
         {% for fila in filas %}
         <tr>
-            <td data-label="Mes">{{ fila.mes|date:"F Y"|capfirst }}</td>
+            <td data-label="Período">{{ fila.etiqueta }}</td>
             <td data-label="Ventas">{{ fila.ventas|clp }}</td>
             <td data-label="Gastos">{{ fila.gastos|clp }}</td>
             <td data-label="Utilidad">

@@ -19,4 +19,8 @@ urlpatterns = [
     path("caja/exportar/pdf/", views.caja_exportar_pdf, name="reporte_caja_pdf"),
     path("caja/exportar/excel/", views.caja_exportar_excel, name="reporte_caja_excel"),
     path("caja/saldo-inicial/", views.saldo_inicial_editar, name="saldo_inicial_editar"),
+
+    path("vehiculos/", views.vehiculos, name="reporte_vehiculos"),
+    path("vehiculos/exportar/pdf/", views.vehiculos_exportar_pdf, name="reporte_vehiculos_pdf"),
+    path("vehiculos/exportar/excel/", views.vehiculos_exportar_excel, name="reporte_vehiculos_excel"),
 ]

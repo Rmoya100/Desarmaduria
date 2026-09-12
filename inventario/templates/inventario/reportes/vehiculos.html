@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% load monedas %}
+
+{% block title %}Ingresos por vehículo · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header page-header--actions">
+    <h1>Ingresos por vehículo</h1>
+    <div class="page-header__actions">
+        <a href="{% url 'reporte_vehiculos_pdf' %}?desde={{ desde }}&hasta={{ hasta }}" class="btn btn-pdf">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                <path d="M14 3v5h5"></path>
+                <path d="M9.5 17v-4.5h1.2a1.4 1.4 0 0 1 0 2.8H9.5M13.3 17v-4.5h1.6a1.5 1.5 0 0 1 1.5 1.5v1.5a1.5 1.5 0 0 1-1.5 1.5h-1.6z"></path>
+            </svg>
+            <span>PDF</span>
+        </a>
+        <a href="{% url 'reporte_vehiculos_excel' %}?desde={{ desde }}&hasta={{ hasta }}" class="btn btn-excel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                <path d="M14 3v5h5"></path>
+                <path d="M9 12.5l5.5 5M14.5 12.5l-5.5 5"></path>
+            </svg>
+            <span>Excel</span>
+        </a>
+    </div>
+</div>
+
+{% include "inventario/reportes/_subnav.html" %}
+
+<form method="get" class="filter-bar">
+    <div class="form-group">
+        <label for="id_desde">Desde</label>
+        <input type="date" id="id_desde" name="desde" value="{{ desde }}" class="form-control">
+    </div>
+    <div class="form-group">
+        <label for="id_hasta">Hasta</label>
+        <input type="date" id="id_hasta" name="hasta" value="{{ hasta }}" class="form-control">
+    </div>
+    <div class="form-group filter-bar__actions">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <a href="{% url 'reporte_vehiculos' %}" class="btn">Limpiar</a>
+    </div>
+</form>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <span class="stat-card__label">Total generado</span>
+        <span class="stat-card__value">{{ total_general|clp }}</span>
+        <span class="stat-card__meta">{{ cantidad_vehiculos }} vehículo{{ cantidad_vehiculos|pluralize }} con ventas</span>
+    </div>
+</div>
+
+<div class="chart-panel" style="margin-bottom: var(--spacing-4);">
+    <h2>Vehículos con mayores ventas</h2>
+    <span class="chart-panel__subtitulo">Top 10 por monto generado en el rango</span>
+    <div class="chart-panel__canvas-wrap">
+        <canvas id="graficoVehiculos"></canvas>
+    </div>
+</div>
+
+{% if vehiculos %}
+<table class="tabla-cards">
+    <thead>
+        <tr>
+            <th>Vehículo</th>
+            <th>Unidades vendidas</th>
+            <th>Total generado</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for vehiculo in vehiculos %}
+        <tr>
+            <td data-label="Vehículo">{{ vehiculo.descripcion }}</td>
+            <td data-label="Unidades vendidas">{{ vehiculo.unidades }}</td>
+            <td data-label="Total generado">{{ vehiculo.total|clp }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <td colspan="2"><strong>Total</strong></td>
+            <td data-label="Total"><strong>{{ total_general|clp }}</strong></td>
+        </tr>
+    </tfoot>
+</table>
+{% else %}
+<div class="empty-state">No hay piezas vendidas con un vehículo de origen asociado en este rango.</div>
+{% endif %}
+
+{{ grafico_vehiculos|json_script:"datos-vehiculos" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+(function () {
+    var estilo = getComputedStyle(document.documentElement);
+    var colorVentas = estilo.getPropertyValue('--chart-ventas').trim();
+    var colorTexto = estilo.getPropertyValue('--color-text-muted').trim();
+    var colorBorde = estilo.getPropertyValue('--color-border').trim();
+
+    Chart.defaults.font.family = "-apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
+    Chart.defaults.color = colorTexto;
+
+    function formatoCLP(valor) {
+        var signo = valor < 0 ? '-' : '';
+        return signo + '$' + Math.abs(valor).toLocaleString('es-CL');
+    }
+
+    var datos = JSON.parse(document.getElementById('datos-vehiculos').textContent);
+    var elemento = document.getElementById('graficoVehiculos');
+    if (datos.etiquetas.length) {
+        new Chart(elemento, {
+            type: 'bar',
+            data: {
+                labels: datos.etiquetas,
+                datasets: [
+                    {
+                        label: 'Total generado',
+                        data: datos.valores,
+                        backgroundColor: colorVentas,
+                        borderRadius: 4,
+                        maxBarThickness: 28,
+                    },
+                ],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { beginAtZero: true, grid: { color: colorBorde }, ticks: { callback: (v) => formatoCLP(v) } },
+                    y: { grid: { display: false } },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => formatoCLP(ctx.parsed.x) } },
+                },
+            },
+        });
+    }
+})();
+</script>
+{% endblock %}

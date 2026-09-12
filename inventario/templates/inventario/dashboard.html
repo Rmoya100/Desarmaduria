@@ -17,7 +17,7 @@
                 <path d="M3 4h2l2.4 11.5a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 8H6.2"></path>
             </svg>
         </div>
-        <span class="kpi-card__label">Ventas del mes</span>
+        <span class="kpi-card__label">Ventas del período</span>
         <span class="kpi-card__value">{{ total_ventas_mes|clp }}</span>
         <span class="kpi-card__meta">{{ cantidad_ventas_mes }} venta{{ cantidad_ventas_mes|pluralize }}</span>
     </div>
@@ -29,7 +29,7 @@
                 <path d="M16 12h3v3h-3a1.5 1.5 0 0 1 0-3z"></path>
             </svg>
         </div>
-        <span class="kpi-card__label">Gastos del mes</span>
+        <span class="kpi-card__label">Gastos del período</span>
         <span class="kpi-card__value">{{ total_gastos_mes|clp }}</span>
         <span class="kpi-card__meta">{{ cantidad_gastos_mes }} gasto{{ cantidad_gastos_mes|pluralize }}</span>
     </div>
@@ -41,9 +41,46 @@
                 <path d="M15 6h6v6"></path>
             </svg>
         </div>
-        <span class="kpi-card__label">Utilidad del mes</span>
+        <span class="kpi-card__label">Utilidad del período</span>
         <span class="kpi-card__value {% if utilidad_mes < 0 %}kpi-card__value--peligro{% else %}kpi-card__value--exito{% endif %}">{{ utilidad_mes|clp }}</span>
         <span class="kpi-card__meta">Ventas − gastos</span>
+    </div>
+
+    <div class="kpi-card">
+        <div class="kpi-card__icon kpi-card__icon--primario">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        </div>
+        <span class="kpi-card__label">Efectivo</span>
+        <span class="kpi-card__value">{{ total_efectivo|clp }}</span>
+        <span class="kpi-card__meta">Del período</span>
+    </div>
+
+    <div class="kpi-card">
+        <div class="kpi-card__icon kpi-card__icon--primario">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                <line x1="2" y1="10" x2="22" y2="10"></line>
+            </svg>
+        </div>
+        <span class="kpi-card__label">Transferencia y tarjeta</span>
+        <span class="kpi-card__value">{{ total_transferencia_tarjeta|clp }}</span>
+        <span class="kpi-card__meta">Del período, IVA incluido</span>
+    </div>
+
+    <div class="kpi-card">
+        <div class="kpi-card__icon kpi-card__icon--alerta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="7" cy="7" r="2.5"></circle>
+                <circle cx="17" cy="17" r="2.5"></circle>
+                <line x1="6" y1="18" x2="18" y2="6"></line>
+            </svg>
+        </div>
+        <span class="kpi-card__label">IVA recaudado</span>
+        <span class="kpi-card__value">{{ total_iva|clp }}</span>
+        <span class="kpi-card__meta">Ventas con transferencia/tarjeta</span>
     </div>
 
     <div class="kpi-card">
@@ -57,30 +94,6 @@
         </div>
         <span class="kpi-card__label">Productos activos</span>
         <span class="kpi-card__value">{{ productos_activos }}</span>
-    </div>
-
-    <div class="kpi-card">
-        <div class="kpi-card__icon {% if cantidad_stock_bajo > 0 %}kpi-card__icon--alerta{% else %}kpi-card__icon--exito{% endif %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 4l9.5 16h-19L12 4z"></path>
-                <line x1="12" y1="10" x2="12" y2="14.5"></line>
-                <circle cx="12" cy="17.3" r="0.15" fill="currentColor"></circle>
-            </svg>
-        </div>
-        <span class="kpi-card__label">Stock bajo</span>
-        <span class="kpi-card__value {% if cantidad_stock_bajo > 0 %}kpi-card__value--alerta{% endif %}">{{ cantidad_stock_bajo }}</span>
-        <span class="kpi-card__meta">Umbral: {{ umbral_bajo_stock }} uds.</span>
-    </div>
-
-    <div class="kpi-card">
-        <div class="kpi-card__icon {% if cantidad_sin_stock > 0 %}kpi-card__icon--peligro{% else %}kpi-card__icon--exito{% endif %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="9"></circle>
-                <line x1="5.5" y1="18.5" x2="18.5" y2="5.5"></line>
-            </svg>
-        </div>
-        <span class="kpi-card__label">Sin stock</span>
-        <span class="kpi-card__value {% if cantidad_sin_stock > 0 %}kpi-card__value--peligro{% endif %}">{{ cantidad_sin_stock }}</span>
     </div>
 
     <div class="kpi-card">
@@ -110,45 +123,6 @@
 </div>
 
 <div class="dashboard-grid">
-    <div class="panel-alert">
-        <div class="panel-alert__header panel-alert__header--peligro">
-            <span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12 4l9.5 16h-19L12 4z"></path>
-                    <line x1="12" y1="10" x2="12" y2="14.5"></line>
-                    <circle cx="12" cy="17.3" r="0.15" fill="currentColor"></circle>
-                </svg>
-                Productos con stock bajo
-            </span>
-            {% if productos_stock_bajo %}
-            <a href="{% url 'reporte_rotacion' %}">Ver todos →</a>
-            {% endif %}
-        </div>
-        <div class="panel-alert__body">
-            {% if productos_stock_bajo %}
-            <table class="tabla-cards tabla-cards--plana">
-                <thead><tr><th>Producto</th><th>Stock</th></tr></thead>
-                <tbody>
-                    {% for producto in productos_stock_bajo %}
-                    <tr>
-                        <td data-label="Producto">{{ producto.nombre }}</td>
-                        <td data-label="Stock"><span class="badge badge-warning">{{ producto.stock_disponible }}</span></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <div class="panel-alert__empty">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9"></circle>
-                    <path d="M8 12.5l2.5 2.5L16 9.5"></path>
-                </svg>
-                <span>¡Todos los productos tienen stock suficiente!</span>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-
     <div class="chart-panel">
         <h2>Productos más vendidos</h2>
         <span class="chart-panel__subtitulo">Histórico, top 5 por unidades</span>
@@ -156,45 +130,67 @@
             <canvas id="graficoTopProductos"></canvas>
         </div>
     </div>
+
+    <div class="chart-panel">
+        <h2>Valor de inventario por categoría</h2>
+        <span class="chart-panel__subtitulo">Stock disponible a costo de adquisición</span>
+        <div class="chart-panel__canvas-wrap">
+            <canvas id="graficoValorCategoria"></canvas>
+        </div>
+    </div>
 </div>
 
 <div class="chart-panel" style="margin-bottom: var(--spacing-4);">
-    <h2>Evolución mensual</h2>
-    <span class="chart-panel__subtitulo">Ventas vs. gastos, últimos 6 meses</span>
+    <h2>Evolución por período</h2>
+    <span class="chart-panel__subtitulo">Ventas vs. gastos, últimos 6 períodos (día 5 al día 6 del mes siguiente)</span>
     <div class="chart-panel__canvas-wrap">
         <canvas id="graficoEvolucion"></canvas>
     </div>
 </div>
 
-<div class="dashboard-grid">
-    <section class="panel">
-        <h2>Ventas recientes</h2>
-        {% if ventas_recientes %}
-        <table class="tabla-cards tabla-cards--plana">
+<div class="chart-panel" style="margin-bottom: var(--spacing-4);">
+    <h2>Gastos por concepto y por período</h2>
+    <span class="chart-panel__subtitulo">Últimos {{ gastos_por_concepto.columnas|length }} períodos</span>
+    {% if gastos_por_concepto.conceptos %}
+    <div class="table-scroll">
+        <table>
             <thead>
                 <tr>
-                    <th>Fecha</th>
-                    <th>Documento</th>
-                    <th>Forma de pago</th>
-                    <th>Registrado por</th>
+                    <th>Concepto</th>
+                    {% for columna in gastos_por_concepto.columnas %}
+                    <th>{{ columna.etiqueta }}</th>
+                    {% endfor %}
+                    <th>Total</th>
                 </tr>
             </thead>
             <tbody>
-                {% for v in ventas_recientes %}
+                {% for concepto in gastos_por_concepto.conceptos %}
                 <tr>
-                    <td data-label="Fecha">{{ v.fecha_venta }}</td>
-                    <td data-label="Documento">{{ v.tipo_documento }}</td>
-                    <td data-label="Forma de pago">{{ v.forma_pago }}</td>
-                    <td data-label="Registrado por">{{ v.usuario }}</td>
+                    <td>{{ concepto.nombre }}</td>
+                    {% for monto in concepto.montos %}
+                    <td>{{ monto|clp }}</td>
+                    {% endfor %}
+                    <td><strong>{{ concepto.total|clp }}</strong></td>
                 </tr>
                 {% endfor %}
             </tbody>
+            <tfoot>
+                <tr>
+                    <td><strong>Total</strong></td>
+                    {% for total_periodo in gastos_por_concepto.totales_por_periodo %}
+                    <td><strong>{{ total_periodo|clp }}</strong></td>
+                    {% endfor %}
+                    <td><strong>{{ gastos_por_concepto.total_general|clp }}</strong></td>
+                </tr>
+            </tfoot>
         </table>
-        {% else %}
-        <div class="empty-state">Sin ventas registradas.</div>
-        {% endif %}
-    </section>
+    </div>
+    {% else %}
+    <div class="empty-state">Sin gastos registrados en este rango.</div>
+    {% endif %}
+</div>
 
+<div class="dashboard-grid">
     <section class="panel">
         <h2>Gastos recientes</h2>
         {% if gastos_recientes %}
@@ -226,6 +222,7 @@
 
 {{ grafico_evolucion|json_script:"datos-evolucion" }}
 {{ grafico_top_productos|json_script:"datos-top-productos" }}
+{{ grafico_valor_categoria|json_script:"datos-valor-categoria" }}
 {% endblock %}
 
 {% block extra_js %}
@@ -322,6 +319,36 @@
                 y: { grid: { display: false } },
             },
             plugins: { legend: { display: false } },
+        },
+    });
+
+    var datosValorCategoria = JSON.parse(document.getElementById('datos-valor-categoria').textContent);
+    new Chart(document.getElementById('graficoValorCategoria'), {
+        type: 'bar',
+        data: {
+            labels: datosValorCategoria.etiquetas,
+            datasets: [
+                {
+                    label: 'Valor de inventario',
+                    data: datosValorCategoria.valores,
+                    backgroundColor: colorVentas,
+                    borderRadius: 4,
+                    maxBarThickness: 28,
+                },
+            ],
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { beginAtZero: true, grid: { color: colorBorde }, ticks: { callback: (v) => formatoCLP(v) } },
+                y: { grid: { display: false } },
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx) => formatoCLP(ctx.parsed.x) } },
+            },
         },
     });
 })();

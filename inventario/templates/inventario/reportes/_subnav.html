@@ -32,5 +32,14 @@
         </svg>
         <span>Flujo de caja</span>
     </a>
+    <a href="{% url 'reporte_vehiculos' %}" class="subnav__link{% if url_name == 'reporte_vehiculos' %} active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11"></path>
+            <rect x="3" y="11" width="18" height="6" rx="1.5"></rect>
+            <circle cx="7.5" cy="17.5" r="1.5"></circle>
+            <circle cx="16.5" cy="17.5" r="1.5"></circle>
+        </svg>
+        <span>Ingresos por vehículo</span>
+    </a>
 </nav>
 {% endwith %}
