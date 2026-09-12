@@ -136,7 +136,48 @@
                 );
                 filaVacia.hidden = quedanVisibles;
             }
+            actualizarResumenVenta();
         });
+    }
+
+    // El neto de IVA sale siempre del detalle de productos (cantidad*precio
+    // de cada linea visible), nunca de un monto tipeado aparte: se
+    // recalcula cada vez que se agrega/quita una linea o cambia la forma de
+    // pago. Es solo vista previa -el calculo real y guardado lo hace
+    // Venta.actualizar_montos() en el servidor, despues de guardar el
+    // formset-.
+    var formaPagoSelect = document.getElementById("id_forma_pago");
+    var formasPagoIvaEl = document.getElementById("formas-pago-iva");
+    var resumenIva = document.getElementById("resumen-iva");
+    var resumenNetoValor = document.getElementById("resumen-neto-valor");
+    var resumenIvaValor = document.getElementById("resumen-iva-valor");
+    var resumenTotalValor = document.getElementById("resumen-total-valor");
+    var formasPagoIva = formasPagoIvaEl ? JSON.parse(formasPagoIvaEl.textContent) : {};
+
+    function formatearCLP(valor) {
+        return "$" + Math.round(valor).toLocaleString("es-CL");
+    }
+
+    function actualizarResumenVenta() {
+        if (!formaPagoSelect || !resumenIva || !cuerpoFormset) return;
+        var activa = !!formasPagoIva[formaPagoSelect.value];
+        resumenIva.hidden = !activa;
+        if (!activa) return;
+        var neto = 0;
+        cuerpoFormset.querySelectorAll(".formset-row").forEach(function (fila) {
+            if (fila.hidden) return;
+            var cantidad = parseFloat(fila.querySelector('[name$="-cantidad"]').value) || 0;
+            var precio = parseFloat(fila.querySelector('[name$="-precio"]').value) || 0;
+            neto += cantidad * precio;
+        });
+        var iva = neto * 0.19;
+        resumenNetoValor.textContent = formatearCLP(neto);
+        resumenIvaValor.textContent = formatearCLP(iva);
+        resumenTotalValor.textContent = formatearCLP(neto + iva);
+    }
+
+    if (formaPagoSelect) {
+        formaPagoSelect.addEventListener("change", actualizarResumenVenta);
     }
 
     var productosDataEl = document.getElementById("productos-disponibles");
@@ -151,6 +192,7 @@
 
         var inputCantidadNuevo = document.getElementById("cantidad-nueva-linea");
         var inputPrecioNuevo = document.getElementById("precio-nueva-linea");
+        var precioEstimadoNuevaLineaEl = document.getElementById("precio-estimado-nueva-linea");
         var errorNuevaLineaEl = document.getElementById("error-nueva-linea");
         var inputBuscadorModal = document.getElementById("buscador-producto-modal");
         var listaProductosModal = document.getElementById("lista-productos-modal");
@@ -198,7 +240,7 @@
             listaProductosModal.innerHTML = "";
             if (!disponibles.length) {
                 var filaVacia = document.createElement("tr");
-                filaVacia.innerHTML = '<td colspan="3" class="empty-state">Sin productos que coincidan.</td>';
+                filaVacia.innerHTML = '<td colspan="4" class="empty-state">Sin productos que coincidan.</td>';
                 listaProductosModal.appendChild(filaVacia);
                 return;
             }
@@ -208,6 +250,7 @@
                 fila.dataset.id = producto.id_producto;
                 fila.dataset.nombre = producto.nombre;
                 fila.dataset.vehiculo = producto.vehiculo || "";
+                fila.dataset.precio = producto.precio_venta != null ? producto.precio_venta : "";
 
                 var celdaNombre = document.createElement("td");
                 celdaNombre.textContent = producto.nombre;
@@ -215,6 +258,10 @@
                 var celdaVehiculo = document.createElement("td");
                 celdaVehiculo.className = "modal-producto__col-vehiculo";
                 celdaVehiculo.textContent = producto.vehiculo || "Sin vehículo (plantilla)";
+
+                var celdaPrecio = document.createElement("td");
+                celdaPrecio.className = "modal-producto__col-precio";
+                celdaPrecio.textContent = textoPrecioEstimado(producto.precio_venta);
 
                 var celdaStock = document.createElement("td");
                 celdaStock.className = "modal-producto__col-stock";
@@ -225,14 +272,28 @@
 
                 fila.appendChild(celdaNombre);
                 fila.appendChild(celdaVehiculo);
+                fila.appendChild(celdaPrecio);
                 fila.appendChild(celdaStock);
                 listaProductosModal.appendChild(fila);
             });
         }
 
-        function elegirProductoDesdeModal(id, nombre, vehiculo) {
-            productoElegido = { id: id, nombre: nombre, vehiculo: vehiculo };
+        // `precio_venta` viaja como string ("15000.00") porque DjangoJSONEncoder
+        // serializa los Decimal asi; puede venir null si el producto no tiene
+        // precio estimado cargado.
+        function textoPrecioEstimado(precioVenta) {
+            if (precioVenta == null || precioVenta === "") return "Sin precio";
+            return formatearCLP(parseFloat(precioVenta));
+        }
+
+        function elegirProductoDesdeModal(id, nombre, vehiculo, precioVenta) {
+            var precio = precioVenta != null && precioVenta !== "" ? parseFloat(precioVenta) : null;
+            productoElegido = { id: id, nombre: nombre, vehiculo: vehiculo, precioVenta: precio };
             inputBuscadorNuevo.value = vehiculo ? nombre + " · " + vehiculo : nombre;
+            if (precioEstimadoNuevaLineaEl) {
+                precioEstimadoNuevaLineaEl.textContent =
+                    "Precio estimado: " + textoPrecioEstimado(precioVenta);
+            }
             ocultarErrorNuevaLinea();
             setModal(modalBuscarProducto, false);
             inputCantidadNuevo.focus();
@@ -241,7 +302,7 @@
         function actualizarSubtotalFila(fila) {
             var cantidad = parseFloat(fila.querySelector('[name$="-cantidad"]').value) || 0;
             var precio = parseFloat(fila.querySelector('[name$="-precio"]').value) || 0;
-            fila.querySelector(".detalle-subtotal").textContent = "$" + (cantidad * precio).toFixed(2);
+            fila.querySelector(".detalle-subtotal").textContent = formatearCLP(cantidad * precio);
         }
 
         function agregarLineaAlDetalle() {
@@ -273,8 +334,11 @@
                 ? productoElegido.nombre + " · " + productoElegido.vehiculo
                 : productoElegido.nombre;
             fila.querySelector(".detalle-cantidad-valor").textContent = cantidad;
-            fila.querySelector(".detalle-precio-valor").textContent = "$" + precio.toFixed(2);
+            fila.querySelector(".detalle-precio-estimado-valor").textContent =
+                productoElegido.precioVenta != null ? formatearCLP(productoElegido.precioVenta) : "—";
+            fila.querySelector(".detalle-precio-valor").textContent = formatearCLP(precio);
             actualizarSubtotalFila(fila);
+            actualizarResumenVenta();
 
             var filaVaciaDetalle = document.getElementById("detalle-vacio");
             if (filaVaciaDetalle) filaVaciaDetalle.hidden = true;
@@ -283,10 +347,12 @@
             inputBuscadorNuevo.value = "";
             inputCantidadNuevo.value = "";
             inputPrecioNuevo.value = "";
+            if (precioEstimadoNuevaLineaEl) precioEstimadoNuevaLineaEl.textContent = "";
             ocultarErrorNuevaLinea();
         }
 
         cuerpoFormset.querySelectorAll(".formset-row").forEach(actualizarSubtotalFila);
+        actualizarResumenVenta();
 
         inputBuscadorModal.addEventListener("input", function () {
             renderizarListaModal(inputBuscadorModal.value);
@@ -304,7 +370,8 @@
                 elegirProductoDesdeModal(
                     filaProducto.dataset.id,
                     filaProducto.dataset.nombre,
-                    filaProducto.dataset.vehiculo
+                    filaProducto.dataset.vehiculo,
+                    filaProducto.dataset.precio
                 );
                 return;
             }
@@ -313,7 +380,6 @@
             }
         });
     }
-
 
     var form = document.querySelector(".product-filtros");
     if (!form) return;

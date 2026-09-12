@@ -4,8 +4,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import DecimalField, ExpressionWrapper, F, ProtectedError, Sum
+from django.db.models import ProtectedError, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -15,6 +16,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 from .forms import (
+    CategoriaForm,
     ConceptoGastoForm,
     DetalleVentaFormSet,
     FormaPagoForm,
@@ -25,6 +27,7 @@ from .forms import (
     VentaForm,
 )
 from .models import (
+    Categoria,
     ConceptoGasto,
     DetalleVenta,
     FormaPago,
@@ -59,14 +62,9 @@ def dashboard(request):
     ventas_mes = Venta.objects.filter(fecha_venta__gte=inicio_mes, fecha_venta__lte=hoy)
     gastos_mes = Gasto.objects.filter(fecha__gte=inicio_mes, fecha__lte=hoy)
 
-    total_ventas_mes = DetalleVenta.objects.filter(venta__in=ventas_mes).aggregate(
-        total=Sum(
-            ExpressionWrapper(
-                F("cantidad") * F("precio"),
-                output_field=DecimalField(max_digits=12, decimal_places=2),
-            )
-        )
-    )["total"] or Decimal("0")
+    total_ventas_mes = ventas_anotadas().filter(
+        fecha_venta__gte=inicio_mes, fecha_venta__lte=hoy
+    ).aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
     total_gastos_mes = gastos_mes.aggregate(total=Sum("monto"))["total"] or Decimal("0")
 
     # Misma fuente de verdad que el modulo Inventario (servicios/inventario.py):
@@ -224,6 +222,17 @@ CATALOGOS = {
         "url_editar": "documentos_editar",
         "url_eliminar": "documentos_eliminar",
     },
+    "categorias": {
+        "model": Categoria,
+        "form": CategoriaForm,
+        "titulo": "Categorías",
+        "titulo_singular": "categoría",
+        "nuevo": "Nueva categoría",
+        "url_lista": "categorias",
+        "url_crear": "categorias_crear",
+        "url_editar": "categorias_editar",
+        "url_eliminar": "categorias_eliminar",
+    },
 }
 
 
@@ -368,7 +377,7 @@ def gastos_exportar_excel(request):
     # locale del Excel que lo abra, y se puede seguir sumando/ordenado.
     for fila in ws.iter_rows(min_row=2, min_col=4, max_col=4):
         for celda in fila:
-            celda.number_format = "#,##0.00"
+            celda.number_format = "#,##0"
 
     anchos = {"A": 12, "B": 20, "C": 16, "D": 14, "E": 12, "F": 16, "G": 30, "H": 16}
     for columna, ancho in anchos.items():
@@ -496,12 +505,21 @@ def ventas_filtradas(request):
     return queryset
 
 
+VENTAS_POR_PAGINA = 15
+
+
 @permiso_requerido("ventas", "ver")
 def ventas_lista(request):
-    ventas = ventas_filtradas(request).prefetch_related("detalles")
+    ventas = ventas_filtradas(request).prefetch_related(
+        "detalles__producto__vehiculo__modelo__marca"
+    )
+    total = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
+    paginador = Paginator(ventas, VENTAS_POR_PAGINA)
+    pagina = paginador.get_page(request.GET.get("page"))
     contexto = {
-        "ventas": ventas,
-        "total": ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0"),
+        "ventas": pagina,
+        "page_obj": pagina,
+        "total": total,
         "desde": request.GET.get("desde", ""),
         "hasta": request.GET.get("hasta", ""),
         "puede_crear": tiene_permiso(request.user, "ventas", "crear"),
@@ -536,9 +554,18 @@ def _productos_json():
             "nombre": p.nombre,
             "vehiculo": str(p.vehiculo) if p.vehiculo_id else "",
             "stock_disponible": p.stock_disponible,
+            "precio_venta": p.precio_venta,
         }
         for p in productos_con_stock()
     ]
+
+
+def _formas_pago_iva_json():
+    """Le dice a inventario.js, por id de FormaPago, cuales llevan el 19% de
+    IVA (FormaPago.aplica_iva), para mostrar y calcular en vivo el resumen
+    de IVA junto al detalle de productos, sin duplicar la regla de texto en
+    JS."""
+    return {fp.pk: fp.aplica_iva() for fp in FormaPago.objects.all()}
 
 
 @permiso_requerido("ventas", "crear")
@@ -551,12 +578,14 @@ def venta_crear(request):
             venta.save()
             formset.instance = venta
             formset.save()
+            venta.actualizar_montos()
         return redirect("venta_guardada")
     contexto = {
         "form": form,
         "formset": formset,
         "titulo": "Nueva venta",
         "productos_json": _productos_json(),
+        "formas_pago_iva_json": _formas_pago_iva_json(),
         "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
     }
     return render(request, "inventario/venta_form.html", contexto)
@@ -575,6 +604,7 @@ def venta_editar(request, pk):
         with transaction.atomic():
             form.save()
             formset.save()
+            venta.actualizar_montos()
         messages.success(request, "Venta actualizada correctamente.")
         return redirect("ventas")
     contexto = {
@@ -582,6 +612,7 @@ def venta_editar(request, pk):
         "formset": formset,
         "titulo": "Editar venta",
         "productos_json": _productos_json(),
+        "formas_pago_iva_json": _formas_pago_iva_json(),
         "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
     }
     return render(request, "inventario/venta_form.html", contexto)
@@ -603,14 +634,18 @@ def venta_comprobante(request, pk):
         Venta.objects.select_related("tipo_documento", "forma_pago", "usuario"), pk=pk
     )
     filas = [
-        {"detalle": detalle, "subtotal": detalle.cantidad * detalle.precio}
+        {"detalle": detalle, "subtotal": detalle.subtotal}
         for detalle in venta.detalles.select_related("producto__vehiculo__modelo__marca")
     ]
-    total = sum((fila["subtotal"] for fila in filas), Decimal("0"))
+    if venta.monto_total is not None:
+        neto, iva, total = venta.monto_neto, venta.monto_iva, venta.monto_total
+    else:
+        neto = iva = None
+        total = sum((fila["subtotal"] for fila in filas), Decimal("0"))
     return render(
         request,
         "inventario/venta_comprobante.html",
-        {"venta": venta, "filas": filas, "total": total},
+        {"venta": venta, "filas": filas, "neto": neto, "iva": iva, "total": total},
     )
 
 
@@ -628,7 +663,9 @@ def venta_comprobante_pdf(request, pk):
 
 @permiso_requerido("ventas", "ver")
 def ventas_exportar_pdf(request):
-    ventas = ventas_filtradas(request)
+    ventas = ventas_filtradas(request).prefetch_related(
+        "detalles__producto__vehiculo__modelo__marca"
+    )
     total = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
     desde = request.GET.get("desde") or "—"
     hasta = request.GET.get("hasta") or "—"
@@ -642,33 +679,62 @@ def ventas_exportar_pdf(request):
 
 @permiso_requerido("ventas", "ver")
 def ventas_exportar_excel(request):
-    ventas = ventas_filtradas(request)
+    ventas = ventas_filtradas(request).prefetch_related(
+        "detalles__producto__vehiculo__modelo__marca"
+    )
     total = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Ventas"
-    ws.append(["Fecha", "Documento", "Forma de pago", "Usuario", "Total"])
-    for celda in ws[1]:
-        celda.font = Font(bold=True)
+    # Una venta por bloque (encabezado + su detalle completo de productos),
+    # como el comprobante individual, en vez de una sola fila resumen por
+    # venta: para eso hace falta el detalle, no una tabla plana.
     for venta in ventas:
         ws.append(
-            [
-                venta.fecha_venta,
-                str(venta.tipo_documento),
-                str(venta.forma_pago),
-                str(venta.usuario),
-                venta.total_venta,
-            ]
+            [f"Venta #{venta.pk}", venta.fecha_venta, str(venta.tipo_documento), str(venta.forma_pago), str(venta.usuario)]
         )
-    fila_total = ws.max_row + 1
-    ws.cell(row=fila_total, column=4, value="Total").font = Font(bold=True)
-    celda_total = ws.cell(row=fila_total, column=5, value=total)
-    celda_total.font = Font(bold=True)
-    for fila in ws.iter_rows(min_row=2, min_col=5, max_col=5):
+        for celda in ws[ws.max_row]:
+            celda.font = Font(bold=True)
+
+        if venta.observaciones:
+            ws.append([f"Observaciones: {venta.observaciones}"])
+            ws[ws.max_row][0].font = Font(italic=True)
+
+        ws.append(["Producto", "Vehículo", "Cantidad", "Precio", "Subtotal"])
+        for celda in ws[ws.max_row]:
+            celda.font = Font(italic=True)
+
+        for detalle in venta.detalles.all():
+            ws.append(
+                [
+                    str(detalle.producto),
+                    str(detalle.producto.vehiculo) if detalle.producto.vehiculo_id else "",
+                    detalle.cantidad,
+                    detalle.precio,
+                    detalle.subtotal,
+                ]
+            )
+
+        if venta.monto_total is not None:
+            ws.append(["", "", "", "Neto", venta.monto_neto])
+            ws.append(["", "", "", "IVA (19%)", venta.monto_iva])
+            ws.append(["", "", "", "Total", venta.monto_total])
+        else:
+            ws.append(["", "", "", "Total", venta.total_venta])
+        for celda in ws[ws.max_row]:
+            celda.font = Font(bold=True)
+
+        ws.append([])
+
+    ws.append(["", "", "", "Total general", total])
+    for celda in ws[ws.max_row]:
+        celda.font = Font(bold=True)
+
+    for fila in ws.iter_rows(min_row=1, min_col=4, max_col=5):
         for celda in fila:
-            celda.number_format = "#,##0.00"
-    for columna, ancho in {"A": 12, "B": 16, "C": 16, "D": 16, "E": 14}.items():
+            celda.number_format = "#,##0"
+    for columna, ancho in {"A": 26, "B": 20, "C": 12, "D": 16, "E": 14}.items():
         ws.column_dimensions[columna].width = ancho
 
     response = HttpResponse(

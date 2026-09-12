@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static monedas %}
 
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
 {% block title %}{{ titulo }} · Desarmaduría{% endblock %}
@@ -19,6 +19,7 @@
 </div>
 
 {{ productos_json|json_script:"productos-disponibles" }}
+{{ formas_pago_iva_json|json_script:"formas-pago-iva" }}
 <span id="umbral-bajo-stock" hidden>{{ umbral_bajo_stock }}</span>
 
 <div class="form-card form-card--ancho venta-card">
@@ -26,6 +27,7 @@
         {% csrf_token %}
         <div class="form-row">
             {% for field in form %}
+            {% if field.name != "observaciones" %}
             <div class="form-group">
                 <label for="{{ field.id_for_label }}">{{ field.label }}</label>
                 {{ field }}
@@ -33,7 +35,15 @@
                 <p class="form-error">{{ field.errors|join:", " }}</p>
                 {% endif %}
             </div>
+            {% endif %}
             {% endfor %}
+        </div>
+        <div class="form-group">
+            <label for="{{ form.observaciones.id_for_label }}">{{ form.observaciones.label }}</label>
+            {{ form.observaciones }}
+            {% if form.observaciones.errors %}
+            <p class="form-error">{{ form.observaciones.errors|join:", " }}</p>
+            {% endif %}
         </div>
 
         <h2 class="venta-card__subtitulo">
@@ -76,6 +86,7 @@
                 min="1"
                 step="1"
             >
+            <span id="precio-estimado-nueva-linea" class="detalle-toolbar__estimado"></span>
             <input
                 type="number"
                 id="precio-nueva-linea"
@@ -93,6 +104,7 @@
                 <tr>
                     <th>Producto</th>
                     <th>Cantidad</th>
+                    <th>Precio estimado</th>
                     <th>Precio</th>
                     <th>Subtotal</th>
                     <th>Acción</th>
@@ -101,13 +113,14 @@
             <tbody data-formset-body>
                 {% for detalle_form in formset %}
                 <tr class="formset-row">
-                    {{ detalle_form.id }}
+                    {{ detalle_form.id_detalle_venta }}
                     {{ detalle_form.producto }}
                     {{ detalle_form.cantidad }}
                     {{ detalle_form.precio }}
                     <td class="detalle-producto-nombre">{{ detalle_form.instance.producto.descripcion_completa|default:"" }}</td>
                     <td class="detalle-cantidad-valor">{{ detalle_form.instance.cantidad|default:"" }}</td>
-                    <td class="detalle-precio-valor">{% if detalle_form.instance.pk %}${{ detalle_form.instance.precio }}{% endif %}</td>
+                    <td class="detalle-precio-estimado-valor">{% if detalle_form.instance.pk %}{% if detalle_form.instance.precio_estimado %}{{ detalle_form.instance.precio_estimado|clp }}{% else %}—{% endif %}{% endif %}</td>
+                    <td class="detalle-precio-valor">{% if detalle_form.instance.pk %}{{ detalle_form.instance.precio|clp }}{% endif %}</td>
                     <td class="detalle-subtotal"></td>
                     <td>
                         <span hidden>{{ detalle_form.DELETE }}</span>
@@ -118,19 +131,26 @@
             </tbody>
             <tfoot>
                 <tr id="detalle-vacio"{% if formset.forms %} hidden{% endif %}>
-                    <td colspan="5" class="empty-state">Busca, selecciona y agrega los productos de la venta.</td>
+                    <td colspan="6" class="empty-state">Busca, selecciona y agrega los productos de la venta.</td>
                 </tr>
             </tfoot>
         </table>
 
+        <div class="venta-iva-resumen" id="resumen-iva" hidden>
+            <span>Neto: <strong id="resumen-neto-valor">$0</strong></span>
+            <span>IVA (19%): <strong id="resumen-iva-valor">$0</strong></span>
+            <span>Total: <strong id="resumen-total-valor">$0</strong></span>
+        </div>
+
         <template data-formset-empty>
             <tr class="formset-row">
-                {{ formset.empty_form.id }}
+                {{ formset.empty_form.id_detalle_venta }}
                 {{ formset.empty_form.producto }}
                 {{ formset.empty_form.cantidad }}
                 {{ formset.empty_form.precio }}
                 <td class="detalle-producto-nombre"></td>
                 <td class="detalle-cantidad-valor"></td>
+                <td class="detalle-precio-estimado-valor"></td>
                 <td class="detalle-precio-valor"></td>
                 <td class="detalle-subtotal"></td>
                 <td>
@@ -166,6 +186,7 @@
                     <tr>
                         <th>Producto</th>
                         <th class="modal-producto__col-vehiculo">Vehículo</th>
+                        <th class="modal-producto__col-precio">Precio estimado</th>
                         <th class="modal-producto__col-stock">Stock (global)</th>
                     </tr>
                 </thead>

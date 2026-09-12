@@ -165,13 +165,14 @@
                     <tr>
                         <th scope="col">Pieza</th>
                         <th scope="col" class="ingreso-tabla__cantidad">Cantidad</th>
+                        <th scope="col" class="ingreso-tabla__precio">Precio venta est.</th>
                         <th scope="col" class="ingreso-tabla__foto">Foto</th>
                     </tr>
                 </thead>
                 {% for grupo in grupos %}
                 <tbody data-grupo="{{ grupo.categoria.pk }}">
                     <tr class="ingreso-grupo">
-                        <th scope="rowgroup" colspan="3">{{ grupo.categoria.nombre_categoria }}</th>
+                        <th scope="rowgroup" colspan="4">{{ grupo.categoria.nombre_categoria }}</th>
                     </tr>
                     {% for fila in grupo.piezas %}
                     <tr data-pieza data-nombre="{{ fila.pieza.nombre }}">
@@ -189,6 +190,20 @@
                                 placeholder="0"
                                 aria-label="Cantidad de {{ fila.pieza.nombre }}"
                                 data-cantidad
+                            >
+                        </td>
+                        <td class="ingreso-tabla__precio">
+                            <input
+                                type="number"
+                                class="input-control"
+                                name="precio_{{ fila.pieza.pk }}"
+                                value="{{ fila.precio }}"
+                                min="0"
+                                step="0.01"
+                                inputmode="decimal"
+                                placeholder="$0"
+                                aria-label="Precio de venta estimado de {{ fila.pieza.nombre }}"
+                                data-precio
                             >
                         </td>
                         <td class="ingreso-tabla__foto">

@@ -1,4 +1,4 @@
-{% load static %}
+{% load static monedas %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -76,6 +76,10 @@
                 </div>
             </div>
 
+            {% if venta.observaciones %}
+            <p class="comprobante__observaciones"><strong>Observaciones:</strong> {{ venta.observaciones }}</p>
+            {% endif %}
+
             <table>
                 <thead>
                     <tr>
@@ -90,15 +94,25 @@
                     <tr>
                         <td>{{ fila.detalle.producto }}</td>
                         <td>{{ fila.detalle.cantidad }}</td>
-                        <td>${{ fila.detalle.precio }}</td>
-                        <td>${{ fila.subtotal }}</td>
+                        <td>{{ fila.detalle.precio|clp }}</td>
+                        <td>{{ fila.subtotal|clp }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot>
+                    {% if neto is not None %}
+                    <tr>
+                        <td colspan="3">Neto</td>
+                        <td>{{ neto|clp }}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="3">IVA (19%)</td>
+                        <td>{{ iva|clp }}</td>
+                    </tr>
+                    {% endif %}
                     <tr>
                         <td colspan="3"><strong>Total</strong></td>
-                        <td><strong>${{ total }}</strong></td>
+                        <td><strong>{{ total|clp }}</strong></td>
                     </tr>
                 </tfoot>
             </table>

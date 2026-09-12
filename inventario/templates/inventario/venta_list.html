@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load monedas %}
 
 {% block title %}Ventas · Desarmaduría{% endblock %}
 
@@ -53,7 +54,10 @@
             <th>Documento</th>
             <th>Forma de pago</th>
             <th>Usuario</th>
-            <th>N.° productos</th>
+            <th>Vehículo</th>
+            <th>Observaciones</th>
+            <th>Neto</th>
+            <th>IVA</th>
             <th>Total</th>
             <th></th>
         </tr>
@@ -61,38 +65,48 @@
     <tbody>
         {% for venta in ventas %}
         <tr>
-            <td data-label="Fecha">{{ venta.fecha_venta }}</td>
+            <td data-label="Fecha">{{ venta.fecha_venta|date:"d-m-Y" }}</td>
             <td data-label="Documento">{{ venta.tipo_documento }}</td>
             <td data-label="Forma de pago">{{ venta.forma_pago }}</td>
             <td data-label="Usuario">{{ venta.usuario }}</td>
-            <td data-label="N.° productos">{{ venta.detalles.all|length }}</td>
-            <td data-label="Total">${{ venta.total_venta }}</td>
+            <td data-label="Vehículo">
+                {% for detalle in venta.detalles.all %}
+                <div class="venta-producto-linea">{{ detalle.producto.vehiculo|default:"—" }}</div>
+                {% endfor %}
+            </td>
+            <td data-label="Observaciones">
+                {% if venta.observaciones %}
+                <span title="{{ venta.observaciones }}">{{ venta.observaciones|truncatechars:40 }}</span>
+                {% else %}
+                —
+                {% endif %}
+            </td>
+            <td data-label="Neto">{{ venta.monto_neto|default_if_none:0|clp }}</td>
+            <td data-label="IVA">{{ venta.monto_iva|default_if_none:0|clp }}</td>
+            <td data-label="Total">{{ venta.total_venta|clp }}</td>
             <td class="table-actions">
-                <a href="{% url 'venta_comprobante' venta.pk %}" class="btn" aria-label="Ver comprobante">
+                <a href="{% url 'venta_comprobante' venta.pk %}" class="btn" aria-label="Ver comprobante" title="Comprobante">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
                         <path d="M14 3v5h5"></path>
                     </svg>
-                    <span>Comprobante</span>
                 </a>
                 {% if puede_editar %}
-                <a href="{% url 'venta_editar' venta.pk %}" class="btn" aria-label="Editar">
+                <a href="{% url 'venta_editar' venta.pk %}" class="btn" aria-label="Editar" title="Editar">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M12 20h9"></path>
                         <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
                     </svg>
-                    <span>Editar</span>
                 </a>
                 {% endif %}
                 {% if puede_eliminar %}
-                <a href="{% url 'venta_eliminar' venta.pk %}" class="btn btn-danger" aria-label="Eliminar">
+                <a href="{% url 'venta_eliminar' venta.pk %}" class="btn btn-danger" aria-label="Eliminar" title="Eliminar">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M4 7h16"></path>
                         <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
                         <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
                         <path d="M10 11v6M14 11v6"></path>
                     </svg>
-                    <span>Eliminar</span>
                 </a>
                 {% endif %}
             </td>
@@ -101,13 +115,26 @@
     </tbody>
     <tfoot>
         <tr>
-            <td colspan="4"><strong>Total</strong></td>
+            <td colspan="6"><strong>Total</strong></td>
             <td></td>
-            <td data-label="Total"><strong>${{ total }}</strong></td>
+            <td></td>
+            <td data-label="Total"><strong>{{ total|clp }}</strong></td>
             <td></td>
         </tr>
     </tfoot>
 </table>
+
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="pagination" aria-label="Paginación de ventas">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}&desde={{ desde }}&hasta={{ hasta }}" class="btn btn-sm">Anterior</a>
+    {% endif %}
+    <span class="pagination__estado">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}&desde={{ desde }}&hasta={{ hasta }}" class="btn btn-sm">Siguiente</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% else %}
 <div class="empty-state">No hay ventas que coincidan con la búsqueda.</div>
 {% endif %}

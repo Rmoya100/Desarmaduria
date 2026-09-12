@@ -13,6 +13,7 @@ from ..models import Categoria, Producto, ProductoFoto, Vehiculo
 from ..permisos import permiso_requerido, tiene_permiso
 from ..servicios.catalogo import importar_catalogo
 from ..servicios.inventario import productos_con_stock, valor_inventario
+from ..templatetags.monedas import clp
 from .forms import (
     EdicionMasivaForm,
     ImportarCatalogoForm,
@@ -27,8 +28,14 @@ ORDENES_VALIDOS = ("nombre", "-nombre", "categoria", "-categoria", "costo", "-co
 SESION_IMPORTACION = "importacion_catalogo"
 
 
-def _productos_filtrados(request):
+def _productos_filtrados(request, *, forzar_con_stock=False):
+    """`forzar_con_stock=True` fija el listado a solo productos con stock
+    disponible (las Existencias son, por definicion, lo que hay para vender)
+    y quita el filtro "Estado" del formulario: elegir "Agotados" o "Todos"
+    ahi ya no tendria ningun efecto visible, asi que ni se ofrece."""
     form = InventarioFiltroForm(request.GET or None)
+    if forzar_con_stock:
+        del form.fields["estado"]
     productos = productos_con_stock()
 
     if form.is_valid():
@@ -39,10 +46,13 @@ def _productos_filtrados(request):
             productos = productos.filter(vehiculo__modelo__marca=datos["marca"])
         if datos["modelo"]:
             productos = productos.filter(vehiculo__modelo=datos["modelo"])
-        if datos["estado"] == "disponible":
-            productos = productos.filter(stock_disponible__gt=0)
-        elif datos["estado"] == "agotado":
-            productos = productos.filter(stock_disponible__lte=0)
+        if not forzar_con_stock:
+            if datos["estado"] == "disponible":
+                productos = productos.filter(stock_disponible__gt=0)
+            elif datos["estado"] == "agotado":
+                productos = productos.filter(stock_disponible__lte=0)
+    if forzar_con_stock:
+        productos = productos.filter(stock_disponible__gt=0)
     return form, productos
 
 
@@ -88,7 +98,7 @@ def _filtrar_lista_productos(request):
 
 @login_required
 def inventario_visualizacion(request):
-    form, productos = _productos_filtrados(request)
+    form, productos = _productos_filtrados(request, forzar_con_stock=True)
 
     resumen = productos.aggregate(
         productos=Sum("stock_disponible"),
@@ -113,19 +123,27 @@ def inventario_visualizacion(request):
 
 @login_required
 def inventario_valorizado(request):
-    form, productos = _productos_filtrados(request)
+    """El "costo unitario" de esta pantalla es el precio de venta estimado
+    (Producto.precio_venta, cargado desde Productos o desde una Entrada), no
+    Producto.costo: en piezas usadas no se lleva un costo de adquisicion por
+    unidad, asi que el valor de referencia del inventario es cuanto se
+    estima poder venderlo. El KPI "Valor del inventario" del Dashboard sigue
+    usando Producto.costo (servicios.inventario.valor_inventario) sin
+    cambios; esto es especifico de esta pantalla."""
+    form, productos = _productos_filtrados(request, forzar_con_stock=True)
     productos = list(productos)
     for producto in productos:
-        producto.valor_stock = (producto.costo or 0) * producto.stock_disponible
+        producto.valor_stock = (producto.precio_venta or 0) * producto.stock_disponible
+    valor_total = sum(p.valor_stock for p in productos)
     contexto = {
         "form": form,
         "productos": productos,
-        "valor_inventario": valor_inventario(productos),
+        "valor_inventario": valor_total,
         "unidades_disponibles": sum(p.stock_disponible for p in productos),
         "productos_con_stock": sum(1 for p in productos if p.stock_disponible > 0),
         "metricas": [
             {"titulo": "Unidades disponibles", "valor": sum(p.stock_disponible for p in productos), "detalle": "Stock actual"},
-            {"titulo": "Valor del inventario", "valor": f"${valor_inventario(productos):,.0f}", "detalle": "A costo de adquisición"},
+            {"titulo": "Valor del inventario", "valor": clp(valor_total), "detalle": "A costo de adquisición"},
             {"titulo": "Unidades vendidas", "valor": sum(p.total_vendido for p in productos), "detalle": "Salidas registradas"},
             {"titulo": "Productos con stock", "valor": sum(p.stock_disponible > 0 for p in productos), "detalle": "Referencias activas"},
         ],

@@ -124,6 +124,7 @@ def resolver_producto(producto_base, vehiculo):
         categoria_id=producto_base.categoria_id,
         vehiculo=vehiculo,
         costo=producto_base.costo,
+        precio_venta=producto_base.precio_venta,
     )
 
 
@@ -192,7 +193,15 @@ def validar_stock_resultante(entrada, lineas):
 # Operaciones de escritura
 # ---------------------------------------------------------------------------
 @transaction.atomic
-def registrar_ingreso(entrada, datos_vehiculo, fecha, lineas_base, usuario, fotos_por_pieza=None):
+def registrar_ingreso(
+    entrada,
+    datos_vehiculo,
+    fecha,
+    lineas_base,
+    usuario,
+    fotos_por_pieza=None,
+    precios_por_pieza=None,
+):
     """Crea o actualiza un ingreso completo.
 
     `lineas_base` viene del formulario como [(pieza_del_catalogo, cantidad)].
@@ -207,10 +216,16 @@ def registrar_ingreso(entrada, datos_vehiculo, fecha, lineas_base, usuario, foto
     informa como aviso en vez de abortar el ingreso completo: la cantidad es
     lo importante, la foto es un plus.
 
+    `precios_por_pieza` es un dict opcional {producto_base.pk: Decimal} con el
+    precio de venta estimado que el operador tecleo para esa pieza; se guarda
+    como `precio_venta` del PRODUCTO REAL. Dejarlo en blanco (pieza ausente
+    del dict) significa "sin cambios": no se toca el precio ya guardado.
+
     Devuelve (entrada, avisos): avisos es una lista de strings no
     bloqueantes para mostrar como mensajes de advertencia.
     """
     fotos_por_pieza = fotos_por_pieza or {}
+    precios_por_pieza = precios_por_pieza or {}
     vehiculo = obtener_o_crear_vehiculo(**datos_vehiculo)
 
     lineas = []
@@ -222,6 +237,11 @@ def registrar_ingreso(entrada, datos_vehiculo, fecha, lineas_base, usuario, foto
             continue
         producto = resolver_producto(base, vehiculo)
         lineas.append((producto, cantidad))
+
+        precio = precios_por_pieza.get(base.pk)
+        if precio is not None and producto.precio_venta != precio:
+            producto.precio_venta = precio
+            producto.save(update_fields=["precio_venta"])
 
         archivo = fotos_por_pieza.get(base.pk)
         if archivo is None:
@@ -289,3 +309,22 @@ def cantidades_por_pieza(entrada):
         pk = plantillas.get(clave, detalle.producto_id)
         cantidades[pk] = cantidades.get(pk, 0) + detalle.cantidad
     return cantidades
+
+
+def precios_por_pieza(entrada):
+    """Precio de venta del producto real de cada pieza de este ingreso,
+    mapeado a la pieza del catalogo (mismo criterio que `cantidades_por_pieza`),
+    para prellenar el formulario de edicion."""
+    detalles = entrada.detalles.select_related("producto")
+    if not detalles:
+        return {}
+    plantillas = {
+        (pieza.categoria_id, pieza.nombre): pieza.pk for pieza in catalogo_piezas()
+    }
+    precios = {}
+    for detalle in detalles:
+        clave = (detalle.producto.categoria_id, detalle.producto.nombre)
+        pk = plantillas.get(clave, detalle.producto_id)
+        if detalle.producto.precio_venta is not None:
+            precios[pk] = detalle.producto.precio_venta
+    return precios

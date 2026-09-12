@@ -164,6 +164,49 @@ class VentaAccesoTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class CategoriaAccesoTests(TestCase):
+    """El modulo 'categorias' se agrego al sistema de permisos por rol en la
+    migracion 0020_seed_permisos_categorias; estas pruebas verifican que el
+    control de acceso y el CRUD funcionan de punta a punta."""
+
+    def setUp(self):
+        self.rol_administrador = Rol.objects.get(nombre_rol="Administrador")
+        self.usuario_autorizado = crear_usuario("con_permiso_cat", rol=self.rol_administrador)
+        self.rol_sin_permisos = Rol.objects.create(nombre_rol="RolSinPermisosCategoriasTest")
+        self.usuario_sin_permiso = crear_usuario("sin_permiso_cat", rol=self.rol_sin_permisos)
+
+    def test_usuario_sin_permiso_recibe_403(self):
+        self.client.force_login(self.usuario_sin_permiso)
+        response = self.client.get(reverse("categorias"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_usuario_autorizado_ve_la_lista(self):
+        self.client.force_login(self.usuario_autorizado)
+        response = self.client.get(reverse("categorias"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_crear_editar_y_eliminar_categoria(self):
+        self.client.force_login(self.usuario_autorizado)
+        self.client.post(reverse("categorias_crear"), {"nombre_categoria": "Frenos"})
+        categoria = Categoria.objects.get(nombre_categoria="FRENOS")
+
+        self.client.post(reverse("categorias_editar", args=[categoria.pk]), {"nombre_categoria": "Frenos ABS"})
+        categoria.refresh_from_db()
+        self.assertEqual(categoria.nombre_categoria, "FRENOS ABS")
+
+        self.client.post(reverse("categorias_eliminar", args=[categoria.pk]))
+        self.assertFalse(Categoria.objects.filter(pk=categoria.pk).exists())
+
+    def test_no_se_puede_eliminar_categoria_en_uso(self):
+        self.client.force_login(self.usuario_autorizado)
+        categoria = Categoria.objects.create(nombre_categoria="En uso")
+        Producto.objects.create(categoria=categoria, nombre="Producto con categoria", costo=Decimal("1000"))
+
+        self.client.post(reverse("categorias_eliminar", args=[categoria.pk]))
+
+        self.assertTrue(Categoria.objects.filter(pk=categoria.pk).exists())
+
+
 class VentaCrearViewTests(TestCase):
     def setUp(self):
         rol_administrador = Rol.objects.get(nombre_rol="Administrador")
@@ -234,6 +277,171 @@ class VentaCrearViewTests(TestCase):
         contenido = response.content.decode()
         self.assertIn(reverse("venta_crear"), contenido)
         self.assertIn(reverse("ventas"), contenido)
+
+
+class DetalleVentaPrecioEstimadoTests(TestCase):
+    """`DetalleVenta.precio_estimado` es un snapshot de solo lectura de
+    `Producto.precio_venta` al momento de la venta: el precio real
+    (`precio`) lo sigue escribiendo el vendedor sin restricciones, y el
+    snapshot no se recalcula si el precio_venta del producto cambia despues."""
+
+    def setUp(self):
+        rol_administrador = Rol.objects.get(nombre_rol="Administrador")
+        self.usuario = crear_usuario("vendedor_estimado", rol=rol_administrador)
+        self.client.force_login(self.usuario)
+        self.tipo_documento = TipoDocumento.objects.create(tipo_documento="Boleta")
+        self.forma_pago = FormaPago.objects.create(forma_pago="Efectivo")
+        self.producto = crear_producto_con_stock(cantidad=10, usuario=self.usuario)
+        self.prefix = DetalleVentaFormSet(instance=Venta()).prefix
+
+    def _post_data(self, lineas):
+        data = {
+            "fecha_venta": "2026-01-05",
+            "tipo_documento": self.tipo_documento.pk,
+            "forma_pago": self.forma_pago.pk,
+        }
+        data.update(datos_formset(self.prefix, lineas))
+        return data
+
+    def test_linea_nueva_guarda_snapshot_del_precio_venta_del_producto(self):
+        self.producto.precio_venta = Decimal("2000")
+        self.producto.save(update_fields=["precio_venta"])
+
+        data = self._post_data(
+            [{"producto": self.producto.pk, "cantidad": "1", "precio": "1500"}]
+        )
+        response = self.client.post(reverse("venta_crear"), data)
+        self.assertRedirects(response, reverse("venta_guardada"))
+
+        detalle = Venta.objects.get().detalles.get()
+        self.assertEqual(detalle.precio, Decimal("1500"))
+        self.assertEqual(detalle.precio_estimado, Decimal("2000"))
+
+    def test_producto_sin_precio_venta_se_puede_vender_igual(self):
+        self.assertIsNone(self.producto.precio_venta)
+        data = self._post_data(
+            [{"producto": self.producto.pk, "cantidad": "1", "precio": "1500"}]
+        )
+        response = self.client.post(reverse("venta_crear"), data)
+        self.assertRedirects(response, reverse("venta_guardada"))
+
+        detalle = Venta.objects.get().detalles.get()
+        self.assertEqual(detalle.precio, Decimal("1500"))
+        self.assertIsNone(detalle.precio_estimado)
+
+    def test_editar_venta_no_recalcula_el_snapshot_ya_guardado(self):
+        self.producto.precio_venta = Decimal("2000")
+        self.producto.save(update_fields=["precio_venta"])
+        data = self._post_data(
+            [{"producto": self.producto.pk, "cantidad": "1", "precio": "1500"}]
+        )
+        self.client.post(reverse("venta_crear"), data)
+        venta = Venta.objects.get()
+        detalle = venta.detalles.get()
+        self.assertEqual(detalle.precio_estimado, Decimal("2000"))
+
+        # El precio estimado del producto cambia despues de la venta.
+        Producto.objects.filter(pk=self.producto.pk).update(precio_venta=Decimal("3500"))
+
+        data_editar = self._post_data(
+            [
+                {
+                    "id_detalle_venta": detalle.pk,
+                    "producto": self.producto.pk,
+                    "cantidad": "1",
+                    "precio": "1500",
+                }
+            ]
+        )
+        data_editar[f"{self.prefix}-INITIAL_FORMS"] = "1"
+        response = self.client.post(reverse("venta_editar", args=[venta.pk]), data_editar)
+        self.assertRedirects(response, reverse("ventas"))
+
+        detalle.refresh_from_db()
+        self.assertEqual(detalle.precio_estimado, Decimal("2000"))
+
+
+class VentaObservacionesTests(TestCase):
+    """Venta.observaciones: campo libre y opcional para dejar comentarios en
+    algunas ventas. Se guarda desde el formulario y se ve en el listado, el
+    comprobante y las exportaciones."""
+
+    def setUp(self):
+        rol_administrador = Rol.objects.get(nombre_rol="Administrador")
+        self.usuario = crear_usuario("vendedor_obs", rol=rol_administrador)
+        self.client.force_login(self.usuario)
+        self.tipo_documento = TipoDocumento.objects.create(tipo_documento="Boleta")
+        self.forma_pago = FormaPago.objects.create(forma_pago="Efectivo")
+        self.producto = crear_producto_con_stock(cantidad=10, usuario=self.usuario)
+        self.prefix = DetalleVentaFormSet(instance=Venta()).prefix
+
+    def _post_data(self, lineas, observaciones=""):
+        data = {
+            "fecha_venta": "2026-01-05",
+            "tipo_documento": self.tipo_documento.pk,
+            "forma_pago": self.forma_pago.pk,
+            "observaciones": observaciones,
+        }
+        data.update(datos_formset(self.prefix, lineas))
+        return data
+
+    def test_guarda_la_observacion_al_crear_la_venta(self):
+        data = self._post_data(
+            [{"producto": self.producto.pk, "cantidad": "1", "precio": "1500"}],
+            observaciones="Cliente pidió factura a nombre de la empresa.",
+        )
+        response = self.client.post(reverse("venta_crear"), data)
+        self.assertRedirects(response, reverse("venta_guardada"))
+        venta = Venta.objects.get()
+        self.assertEqual(venta.observaciones, "Cliente pidió factura a nombre de la empresa.")
+
+    def test_observaciones_es_opcional(self):
+        data = self._post_data(
+            [{"producto": self.producto.pk, "cantidad": "1", "precio": "1500"}]
+        )
+        response = self.client.post(reverse("venta_crear"), data)
+        self.assertRedirects(response, reverse("venta_guardada"))
+        venta = Venta.objects.get()
+        self.assertIn(venta.observaciones, (None, ""))
+
+    def test_observacion_aparece_en_el_listado(self):
+        data = self._post_data(
+            [{"producto": self.producto.pk, "cantidad": "1", "precio": "1500"}],
+            observaciones="Precio rebajado por pieza usada.",
+        )
+        self.client.post(reverse("venta_crear"), data)
+        response = self.client.get(reverse("ventas"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Precio rebajado por pieza usada.", response.content.decode())
+
+    def test_observacion_aparece_en_el_comprobante_y_su_pdf(self):
+        data = self._post_data(
+            [{"producto": self.producto.pk, "cantidad": "1", "precio": "1500"}],
+            observaciones="Entregado con garantía de 30 días.",
+        )
+        self.client.post(reverse("venta_crear"), data)
+        venta = Venta.objects.get()
+
+        response = self.client.get(reverse("venta_comprobante", args=[venta.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Entregado con garantía de 30 días.", response.content.decode())
+
+        response_pdf = self.client.get(reverse("venta_comprobante_pdf", args=[venta.pk]))
+        self.assertEqual(response_pdf.status_code, 200)
+        self.assertEqual(response_pdf["Content-Type"], "application/pdf")
+
+    def test_exportaciones_no_fallan_con_observaciones_cargadas(self):
+        data = self._post_data(
+            [{"producto": self.producto.pk, "cantidad": "1", "precio": "1500"}],
+            observaciones="Nota de prueba para exportación.",
+        )
+        self.client.post(reverse("venta_crear"), data)
+
+        response_pdf = self.client.get(reverse("ventas_exportar_pdf"))
+        self.assertEqual(response_pdf.status_code, 200)
+
+        response_excel = self.client.get(reverse("ventas_exportar_excel"))
+        self.assertEqual(response_excel.status_code, 200)
 
 
 class VentaCicloCompletoTests(TestCase):
@@ -567,6 +775,70 @@ class ProductoGaleriaTests(TestCase):
         self.assertEqual(self.producto.fotos.count(), 3)
 
 
+class InventarioExistenciasTests(TestCase):
+    """`inventario_visualizacion` (Existencias) e `inventario_valorizado`
+    (Inventario valorizado) son, por definicion, lo que hay disponible para
+    vender: ninguna de las dos debe listar productos agotados ni ofrecer un
+    filtro de "Estado" que ya no tendria efecto."""
+
+    def setUp(self):
+        self.usuario = crear_usuario("existencias")
+        self.usuario.is_superuser = True
+        self.usuario.save()
+        self.client.force_login(self.usuario)
+
+    def _crear_con_y_sin_stock(self):
+        con_stock = crear_producto_con_stock(cantidad=5, usuario=self.usuario, nombre="Con stock")
+        categoria = Categoria.objects.create(nombre_categoria="Sin stock")
+        agotado = Producto.objects.create(categoria=categoria, nombre="Agotado", costo=Decimal("500"))
+        return con_stock, agotado
+
+    def test_existencias_no_muestra_productos_agotados(self):
+        con_stock, agotado = self._crear_con_y_sin_stock()
+        respuesta = self.client.get(reverse("inventario_visualizacion"))
+        self.assertEqual(respuesta.status_code, 200)
+        ids = {p.pk for p in respuesta.context["productos"]}
+        self.assertIn(con_stock.pk, ids)
+        self.assertNotIn(agotado.pk, ids)
+
+    def test_existencias_no_ofrece_el_filtro_de_estado(self):
+        respuesta = self.client.get(reverse("inventario_visualizacion"))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertNotIn("id_estado", respuesta.content.decode())
+
+    def test_inventario_valorizado_no_muestra_productos_agotados(self):
+        con_stock, agotado = self._crear_con_y_sin_stock()
+        respuesta = self.client.get(reverse("inventario_valorizado"))
+        self.assertEqual(respuesta.status_code, 200)
+        ids = {p.pk for p in respuesta.context["productos"]}
+        self.assertIn(con_stock.pk, ids)
+        self.assertNotIn(agotado.pk, ids)
+
+    def test_inventario_valorizado_no_ofrece_el_filtro_de_estado(self):
+        respuesta = self.client.get(reverse("inventario_valorizado"))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertNotIn("id_estado", respuesta.content.decode())
+
+    def test_costo_unitario_usa_el_precio_de_venta_estimado_no_el_costo(self):
+        """En piezas usadas no se lleva costo de adquisicion por unidad: el
+        "costo unitario" de este reporte es el precio de venta estimado
+        (Producto.precio_venta), no Producto.costo."""
+        producto = crear_producto_con_stock(cantidad=4, usuario=self.usuario, nombre="Con precio estimado")
+        self.assertEqual(producto.costo, Decimal("1000"))
+        producto.precio_venta = Decimal("2500")
+        producto.save(update_fields=["precio_venta"])
+
+        respuesta = self.client.get(reverse("inventario_valorizado"))
+        self.assertEqual(respuesta.status_code, 200)
+
+        producto_en_contexto = next(
+            p for p in respuesta.context["productos"] if p.pk == producto.pk
+        )
+        self.assertEqual(producto_en_contexto.valor_stock, Decimal("2500") * 4)
+        self.assertEqual(respuesta.context["valor_inventario"], Decimal("2500") * 4)
+        self.assertIn("$2.500", respuesta.content.decode())
+
+
 class IngresoFotoTests(TestCase):
     """La foto por linea de Ingresos debe terminar en el producto REAL del
     vehiculo (nunca en la plantilla), respetar MAX_FOTOS_POR_PRODUCTO y
@@ -652,3 +924,108 @@ class IngresoFotoTests(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         errores = " ".join(respuesta.context["form_lineas"].non_field_errors())
         self.assertIn("no indicaste", errores)
+
+
+class IngresoPrecioVentaTests(TestCase):
+    """El precio de venta estimado por linea de Ingresos debe guardarse en el
+    PRODUCTO REAL (nunca en la plantilla), respetar "en blanco = sin cambios"
+    y exigir cantidad > 0 igual que la foto."""
+
+    def setUp(self):
+        self.usuario = crear_usuario("ingresos-precio")
+        self.usuario.is_superuser = True
+        self.usuario.save()
+        self.client.force_login(self.usuario)
+        self.categoria = Categoria.objects.create(nombre_categoria="Motor")
+        self.plantilla = Producto.objects.create(categoria=self.categoria, nombre="Alternador")
+
+    def _datos(self, cantidad_pk, cantidad, precio_pk=None, precio=None):
+        datos = {
+            "fecha": "2026-09-08",
+            f"cantidad_{cantidad_pk}": str(cantidad),
+            "marca": "SUZUKI",
+            "modelo": "SX4",
+            "tipo_vehiculo": "",
+            "anio_desde": "2007",
+            "anio_hasta": "2012",
+        }
+        if precio is not None:
+            datos[f"precio_{precio_pk}"] = str(precio)
+        return datos
+
+    def test_precio_termina_en_producto_real_no_en_la_plantilla(self):
+        respuesta = self.client.post(
+            reverse("ingreso_crear"),
+            data=self._datos(self.plantilla.pk, 3, self.plantilla.pk, "15000"),
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        self.plantilla.refresh_from_db()
+        self.assertIsNone(self.plantilla.precio_venta)
+        real = Producto.objects.get(nombre="ALTERNADOR", vehiculo__isnull=False)
+        self.assertEqual(real.precio_venta, Decimal("15000"))
+
+    def test_precio_en_blanco_conserva_el_precio_ya_guardado(self):
+        vehiculo = obtener_o_crear_vehiculo(
+            marca="SUZUKI", modelo="SX4", tipo_vehiculo="", anio_desde=2007, anio_hasta=2012
+        )
+        real = resolver_producto(self.plantilla, vehiculo)
+        real.precio_venta = Decimal("20000")
+        real.save(update_fields=["precio_venta"])
+
+        respuesta = self.client.post(
+            reverse("ingreso_crear"),
+            data=self._datos(self.plantilla.pk, 2),
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        real.refresh_from_db()
+        self.assertEqual(real.precio_venta, Decimal("20000"))
+
+    def test_precio_sin_cantidad_exige_completar_la_cantidad(self):
+        respuesta = self.client.post(
+            reverse("ingreso_crear"),
+            data=self._datos(self.plantilla.pk, 0, self.plantilla.pk, "15000"),
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        errores = " ".join(respuesta.context["form_lineas"].non_field_errors())
+        self.assertIn("no indicaste", errores)
+
+    def test_precio_de_pieza_no_permitida_se_rechaza_como_el_idor_de_cantidad(self):
+        otro_vehiculo = Vehiculo.objects.create(
+            modelo=Modelo.objects.create(
+                marca=Marca.objects.create(nombre_marca="TOYOTA"), nombre_modelo="YARIS"
+            ),
+            anio_desde=2008,
+        )
+        ajeno = Producto.objects.create(
+            categoria=self.categoria, nombre="Alternador", vehiculo=otro_vehiculo
+        )
+        respuesta = self.client.post(
+            reverse("ingreso_crear"),
+            data=self._datos(self.plantilla.pk, 1, ajeno.pk, "15000"),
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        errores = " ".join(respuesta.context["form_lineas"].non_field_errors())
+        self.assertIn("no pertenece al catálogo mostrado", errores)
+        ajeno.refresh_from_db()
+        self.assertIsNone(ajeno.precio_venta)
+
+    def test_precio_se_muestra_y_prellena_sin_localizar_para_el_input_number(self):
+        """El value de un <input type="number"> no admite el formato chileno
+        ("," decimal, "." de miles): tiene que llegar sin localizar al
+        formulario. En la vista de detalle (solo texto) en cambio se
+        formatea como moneda chilena vía el filtro `clp`: separador de miles
+        y sin decimales."""
+        respuesta = self.client.post(
+            reverse("ingreso_crear"),
+            data=self._datos(self.plantilla.pk, 2, self.plantilla.pk, "12345.50"),
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        entrada_pk = respuesta.url.rstrip("/").rsplit("/", 1)[-1]
+
+        respuesta = self.client.get(reverse("ingreso_editar", args=[entrada_pk]))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("12345.50", respuesta.content.decode())
+
+        respuesta = self.client.get(reverse("ingreso_detalle", args=[entrada_pk]))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("$12.345", respuesta.content.decode())

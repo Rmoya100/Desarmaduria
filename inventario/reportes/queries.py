@@ -50,21 +50,26 @@ def restar_meses(fecha, meses):
 # Reporte 1: Ventas por periodo
 # ---------------------------------------------------------------------------
 def ventas_anotadas():
-    """Queryset base de Venta con `total_venta` (suma de cantidad*precio de
-    sus detalles) ya anotado, sin filtro de fecha. Lo reutilizan tanto este
-    reporte como el listado del modulo Ventas, para que ambos calculen el
-    total de la misma forma."""
+    """Queryset base de Venta con `total_venta` ya anotado, sin filtro de
+    fecha. Lo reutilizan tanto este reporte como el listado del modulo
+    Ventas (y Reportes/Utilidad/Caja/Dashboard), para que todos calculen el
+    total de la misma forma: si la venta tiene `monto_total` guardado (pago
+    con tarjeta/transferencia, ver Venta.monto_total) se usa ese valor -ya
+    incluye el 19% de IVA-; si no (venta en efectivo), se suma
+    cantidad*precio de sus DetalleVenta, igual que antes."""
     total_expr = Sum(F("cantidad") * F("precio"), output_field=MONTO)
+    detalle_total = Subquery(
+        DetalleVenta.objects.filter(venta=OuterRef("pk"))
+        .values("venta")
+        .annotate(total=total_expr)
+        .values("total")
+    )
     return (
         Venta.objects.select_related("tipo_documento", "forma_pago", "usuario")
         .annotate(
             total_venta=Coalesce(
-                Subquery(
-                    DetalleVenta.objects.filter(venta=OuterRef("pk"))
-                    .values("venta")
-                    .annotate(total=total_expr)
-                    .values("total")
-                ),
+                F("monto_total"),
+                detalle_total,
                 Value(Decimal("0"), output_field=MONTO),
             )
         )
@@ -73,24 +78,19 @@ def ventas_anotadas():
 
 
 def reporte_ventas(desde, hasta):
-    detalles = DetalleVenta.objects.filter(
-        venta__fecha_venta__gte=desde, venta__fecha_venta__lte=hasta
-    )
-    total_expr = Sum(F("cantidad") * F("precio"), output_field=MONTO)
-
     ventas = ventas_anotadas().filter(
         fecha_venta__gte=desde, fecha_venta__lte=hasta
     )
 
-    total_general = detalles.aggregate(total=total_expr)["total"] or Decimal("0")
+    total_general = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
     por_forma_pago = (
-        detalles.values("venta__forma_pago__forma_pago")
-        .annotate(total=total_expr)
+        ventas.values("forma_pago__forma_pago")
+        .annotate(total=Sum("total_venta"))
         .order_by("-total")
     )
     por_tipo_documento = (
-        detalles.values("venta__tipo_documento__tipo_documento")
-        .annotate(total=total_expr)
+        ventas.values("tipo_documento__tipo_documento")
+        .annotate(total=Sum("total_venta"))
         .order_by("-total")
     )
 
@@ -107,15 +107,16 @@ def reporte_ventas(desde, hasta):
 # Reporte 2: Utilidad por mes (ventas - gastos)
 # ---------------------------------------------------------------------------
 def reporte_utilidad(desde, hasta):
-    total_expr = Sum(F("cantidad") * F("precio"), output_field=MONTO)
-
+    # ventas_anotadas() ya trae un order_by("-fecha_venta", "-id_venta"); si
+    # no se reemplaza aca, Django agrega esos campos al GROUP BY (ademas de
+    # "mes") y el agrupamiento por mes queda fragmentado fila por fila.
     ventas_por_mes = (
-        DetalleVenta.objects.filter(
-            venta__fecha_venta__gte=desde, venta__fecha_venta__lte=hasta
-        )
-        .annotate(mes=TruncMonth("venta__fecha_venta"))
+        ventas_anotadas()
+        .filter(fecha_venta__gte=desde, fecha_venta__lte=hasta)
+        .annotate(mes=TruncMonth("fecha_venta"))
         .values("mes")
-        .annotate(total=total_expr)
+        .annotate(total=Sum("total_venta"))
+        .order_by("mes")
     )
     gastos_por_mes = (
         Gasto.objects.filter(fecha__gte=desde, fecha__lte=hasta)
@@ -165,16 +166,13 @@ def saldo_caja(hasta):
     monto_base = saldo_inicial.monto if saldo_inicial else Decimal("0")
     desde_corte = saldo_inicial.fecha if saldo_inicial else None
 
-    ventas = DetalleVenta.objects.filter(venta__fecha_venta__lte=hasta)
+    ventas = ventas_anotadas().filter(fecha_venta__lte=hasta)
     gastos = Gasto.objects.filter(fecha__lte=hasta)
     if desde_corte:
-        ventas = ventas.filter(venta__fecha_venta__gte=desde_corte)
+        ventas = ventas.filter(fecha_venta__gte=desde_corte)
         gastos = gastos.filter(fecha__gte=desde_corte)
 
-    total_ventas = (
-        ventas.aggregate(total=Sum(F("cantidad") * F("precio"), output_field=MONTO))["total"]
-        or Decimal("0")
-    )
+    total_ventas = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
     total_gastos = gastos.aggregate(total=Sum("monto"))["total"] or Decimal("0")
     return monto_base + total_ventas - total_gastos
 

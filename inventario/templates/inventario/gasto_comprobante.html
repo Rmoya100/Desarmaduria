@@ -1,4 +1,4 @@
-{% load static %}
+{% load static monedas %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -68,7 +68,7 @@
                 </div>
                 <div class="comprobante__meta-item">
                     <span>Monto</span>
-                    <strong>${{ gasto.monto }}</strong>
+                    <strong>{{ gasto.monto|clp }}</strong>
                 </div>
                 <div class="comprobante__meta-item">
                     <span>Tipo Doc.</span>
