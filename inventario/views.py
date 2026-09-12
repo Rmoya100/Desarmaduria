@@ -40,7 +40,14 @@ from .models import (
 )
 from .pdf import gasto_comprobante_pdf_bytes, gastos_pdf_bytes, venta_comprobante_pdf_bytes, ventas_pdf_bytes
 from .permisos import permiso_requerido, tiene_permiso
-from .reportes.queries import reporte_utilidad, restar_meses, ventas_anotadas
+from .reportes.queries import (
+    inicio_de_periodo,
+    reporte_gastos_por_concepto,
+    reporte_utilidad,
+    reporte_ventas,
+    restar_meses,
+    ventas_anotadas,
+)
 from .servicios.inventario import productos_con_stock, valor_inventario
 
 # Bajo este umbral (entradas - ventas) un producto se marca "bajo stock" en el
@@ -57,23 +64,27 @@ def en_construccion(request, titulo):
 @login_required
 def dashboard(request):
     hoy = timezone.localdate()
-    inicio_mes = hoy.replace(day=1)
+    # "Periodo actual" del negocio, no mes calendario: del dia 5 de un mes al
+    # dia 6 del siguiente (ver inicio_de_periodo). Gastos/Ventas/Ingresos no
+    # se ven afectados, solo el Dashboard y los Reportes.
+    inicio_periodo = inicio_de_periodo(hoy)
 
-    ventas_mes = Venta.objects.filter(fecha_venta__gte=inicio_mes, fecha_venta__lte=hoy)
-    gastos_mes = Gasto.objects.filter(fecha__gte=inicio_mes, fecha__lte=hoy)
+    ventas_periodo = reporte_ventas(inicio_periodo.isoformat(), hoy.isoformat())
+    gastos_periodo = Gasto.objects.filter(fecha__gte=inicio_periodo, fecha__lte=hoy)
+    total_gastos_periodo = gastos_periodo.aggregate(total=Sum("monto"))["total"] or Decimal("0")
 
-    total_ventas_mes = ventas_anotadas().filter(
-        fecha_venta__gte=inicio_mes, fecha_venta__lte=hoy
-    ).aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
-    total_gastos_mes = gastos_mes.aggregate(total=Sum("monto"))["total"] or Decimal("0")
-
-    # Misma fuente de verdad que el modulo Inventario (servicios/inventario.py):
-    # los 3 KPIs de stock y el valor de inventario salen de la misma anotacion.
+    # Misma fuente de verdad que el modulo Inventario (servicios/inventario.py).
     productos = list(productos_con_stock())
-    productos_stock_bajo = [
-        p for p in productos if 0 < p.stock_disponible <= UMBRAL_BAJO_STOCK
-    ]
-    productos_sin_stock = [p for p in productos if p.stock_disponible <= 0]
+    valor_por_categoria = {}
+    for producto in productos:
+        nombre_categoria = producto.categoria.nombre_categoria
+        valor_producto = (producto.costo or Decimal("0")) * producto.stock_disponible
+        valor_por_categoria[nombre_categoria] = (
+            valor_por_categoria.get(nombre_categoria, Decimal("0")) + valor_producto
+        )
+    categorias_por_valor = sorted(
+        valor_por_categoria.items(), key=lambda item: item[1], reverse=True
+    )
 
     top_productos = list(
         DetalleVenta.objects.values("producto__nombre")
@@ -81,39 +92,42 @@ def dashboard(request):
         .order_by("-cantidad_total")[:5]
     )
 
-    # Evolucion de ventas vs gastos de los ultimos 6 meses (mismo calculo que
-    # el reporte de Utilidad, para que ambas vistas nunca queden desalineadas).
-    desde_evolucion = restar_meses(inicio_mes, 5)
+    # Evolucion de ventas vs gastos, y gastos por concepto, de los ultimos 6
+    # periodos (mismo calculo que Reportes/Utilidad, para que Dashboard y
+    # Reportes nunca queden desalineados).
+    desde_evolucion = restar_meses(inicio_periodo, 5)
     evolucion = reporte_utilidad(desde_evolucion.isoformat(), hoy.isoformat())
+    gastos_por_concepto = reporte_gastos_por_concepto(desde_evolucion.isoformat(), hoy.isoformat())
 
     contexto = {
-        "total_ventas_mes": total_ventas_mes,
-        "cantidad_ventas_mes": ventas_mes.count(),
-        "total_gastos_mes": total_gastos_mes,
-        "cantidad_gastos_mes": gastos_mes.count(),
-        "utilidad_mes": total_ventas_mes - total_gastos_mes,
+        "total_ventas_mes": ventas_periodo["total_general"],
+        "cantidad_ventas_mes": ventas_periodo["cantidad_ventas"],
+        "total_gastos_mes": total_gastos_periodo,
+        "cantidad_gastos_mes": gastos_periodo.count(),
+        "utilidad_mes": ventas_periodo["total_general"] - total_gastos_periodo,
+        "total_efectivo": ventas_periodo["total_efectivo"],
+        "total_transferencia_tarjeta": ventas_periodo["total_transferencia_tarjeta"],
+        "total_iva": ventas_periodo["total_iva"],
         "productos_activos": len(productos),
-        "cantidad_stock_bajo": len(productos_stock_bajo),
-        "cantidad_sin_stock": len(productos_sin_stock),
         "valor_inventario": valor_inventario(productos),
         "total_vehiculos": Vehiculo.objects.count(),
-        "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
-        "productos_stock_bajo": productos_stock_bajo[:8],
         "top_productos": top_productos,
-        "ventas_recientes": Venta.objects.select_related(
-            "tipo_documento", "forma_pago", "usuario"
-        ).order_by("-fecha_venta", "-id_venta")[:5],
+        "gastos_por_concepto": gastos_por_concepto,
         "gastos_recientes": Gasto.objects.select_related("concepto", "usuario").order_by(
             "-fecha", "-id_gasto"
         )[:5],
         "grafico_evolucion": {
-            "etiquetas": [fila["mes"].strftime("%b %Y") for fila in evolucion["filas"]],
+            "etiquetas": [fila["etiqueta"] for fila in evolucion["filas"]],
             "ventas": [float(fila["ventas"]) for fila in evolucion["filas"]],
             "gastos": [float(fila["gastos"]) for fila in evolucion["filas"]],
         },
         "grafico_top_productos": {
             "etiquetas": [fila["producto__nombre"] for fila in top_productos],
             "cantidades": [fila["cantidad_total"] for fila in top_productos],
+        },
+        "grafico_valor_categoria": {
+            "etiquetas": [nombre for nombre, _ in categorias_por_valor],
+            "valores": [float(valor) for _, valor in categorias_por_valor],
         },
     }
     return render(request, "inventario/dashboard.html", contexto)
