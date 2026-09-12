@@ -616,12 +616,13 @@ class SidebarSubmenuTests(TestCase):
         self.assertIn("<summary", html)
         # La clase antigua ya no debe decidir la visibilidad del submenu.
         self.assertNotIn("nav-group--active", html)
-        # El sidebar tiene dos grupos desplegables: Inventario (Existencias,
-        # Inventario valorizado) y Productos (Listado, Edicion masiva,
-        # Importar). Si un comentario `{# #}` quedara abierto apareceria un
+        # El sidebar tiene un solo grupo desplegable: Productos (Listado,
+        # Edicion masiva, Importar). Inventario es un enlace directo desde
+        # que Existencias e Inventario valorizado se unificaron en una sola
+        # pantalla. Si un comentario `{# #}` quedara abierto apareceria un
         # <details> de mas o de menos.
-        self.assertEqual(html.count("<details"), 2)
-        self.assertEqual(html.count('class="nav-sublink'), 5)
+        self.assertEqual(html.count("<details"), 1)
+        self.assertEqual(html.count('class="nav-sublink'), 3)
 
     def test_las_plantillas_no_emiten_comentarios_literales(self):
         """`{# ... #}` solo comenta una linea. Si se abre y no se cierra en la
@@ -632,9 +633,12 @@ class SidebarSubmenuTests(TestCase):
                 self.assertNotIn("{#", html)
                 self.assertNotIn("{%", html)
 
-    def test_abierto_solo_dentro_de_inventario(self):
+    def test_abierto_solo_dentro_de_productos(self):
+        """Inventario ya no es un `<details>` (ver test de arriba): el unico
+        grupo desplegable que queda es Productos, y solo debe abrirse solo
+        al entrar a una de sus pantallas."""
         fuera = self._details(self.client.get(reverse("dashboard")))
-        dentro = self._details(self.client.get(reverse("inventario_visualizacion")))
+        dentro = self._details(self.client.get(reverse("productos_lista")))
         self.assertNotIn("open", fuera)
         self.assertIn("open", dentro)
 
@@ -776,10 +780,11 @@ class ProductoGaleriaTests(TestCase):
 
 
 class InventarioExistenciasTests(TestCase):
-    """`inventario_visualizacion` (Existencias) e `inventario_valorizado`
-    (Inventario valorizado) son, por definicion, lo que hay disponible para
-    vender: ninguna de las dos debe listar productos agotados ni ofrecer un
-    filtro de "Estado" que ya no tendria efecto."""
+    """`inventario_visualizacion` es la pantalla unica de Inventario (fusion
+    de las antiguas "Existencias" e "Inventario valorizado"): por
+    definicion, lo que hay disponible para vender, asi que no debe listar
+    productos agotados ni ofrecer un filtro de "Estado" que ya no tendria
+    efecto."""
 
     def setUp(self):
         self.usuario = crear_usuario("existencias")
@@ -793,7 +798,7 @@ class InventarioExistenciasTests(TestCase):
         agotado = Producto.objects.create(categoria=categoria, nombre="Agotado", costo=Decimal("500"))
         return con_stock, agotado
 
-    def test_existencias_no_muestra_productos_agotados(self):
+    def test_inventario_no_muestra_productos_agotados(self):
         con_stock, agotado = self._crear_con_y_sin_stock()
         respuesta = self.client.get(reverse("inventario_visualizacion"))
         self.assertEqual(respuesta.status_code, 200)
@@ -801,34 +806,27 @@ class InventarioExistenciasTests(TestCase):
         self.assertIn(con_stock.pk, ids)
         self.assertNotIn(agotado.pk, ids)
 
-    def test_existencias_no_ofrece_el_filtro_de_estado(self):
+    def test_inventario_no_ofrece_el_filtro_de_estado(self):
         respuesta = self.client.get(reverse("inventario_visualizacion"))
         self.assertEqual(respuesta.status_code, 200)
         self.assertNotIn("id_estado", respuesta.content.decode())
 
-    def test_inventario_valorizado_no_muestra_productos_agotados(self):
-        con_stock, agotado = self._crear_con_y_sin_stock()
+    def test_url_valorizado_antigua_redirige_a_inventario(self):
+        """La pantalla "Inventario valorizado" se fusiono con Existencias;
+        esta URL se mantiene solo para no romper enlaces guardados."""
         respuesta = self.client.get(reverse("inventario_valorizado"))
-        self.assertEqual(respuesta.status_code, 200)
-        ids = {p.pk for p in respuesta.context["productos"]}
-        self.assertIn(con_stock.pk, ids)
-        self.assertNotIn(agotado.pk, ids)
+        self.assertRedirects(respuesta, reverse("inventario_visualizacion"))
 
-    def test_inventario_valorizado_no_ofrece_el_filtro_de_estado(self):
-        respuesta = self.client.get(reverse("inventario_valorizado"))
-        self.assertEqual(respuesta.status_code, 200)
-        self.assertNotIn("id_estado", respuesta.content.decode())
-
-    def test_costo_unitario_usa_el_precio_de_venta_estimado_no_el_costo(self):
+    def test_valor_en_stock_usa_el_precio_de_venta_estimado_no_el_costo(self):
         """En piezas usadas no se lleva costo de adquisicion por unidad: el
-        "costo unitario" de este reporte es el precio de venta estimado
+        valor en stock de este reporte es el precio de venta estimado
         (Producto.precio_venta), no Producto.costo."""
         producto = crear_producto_con_stock(cantidad=4, usuario=self.usuario, nombre="Con precio estimado")
         self.assertEqual(producto.costo, Decimal("1000"))
         producto.precio_venta = Decimal("2500")
         producto.save(update_fields=["precio_venta"])
 
-        respuesta = self.client.get(reverse("inventario_valorizado"))
+        respuesta = self.client.get(reverse("inventario_visualizacion"))
         self.assertEqual(respuesta.status_code, 200)
 
         producto_en_contexto = next(

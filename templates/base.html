@@ -60,35 +60,23 @@
                 </li>
                 <li>
                     {% comment %}
-                        <details> es un desplegable nativo: alterna solo al pulsarlo,
-                        sin JavaScript, y responde a teclado. El atributo `open` deja
-                        el submenu desplegado al entrar a una pagina de Inventario.
+                        Existencias e Inventario valorizado se unificaron en
+                        una sola pantalla (mismo universo de productos, columnas
+                        complementarias), asi que este ya no es un submenu
+                        desplegable: es un enlace directo, como Dashboard o
+                        Ingresos.
                     {% endcomment %}
-                    {% with url_name=request.resolver_match.url_name %}
-                    <details class="nav-group"{% if url_name == 'inventario_visualizacion' or url_name == 'inventario_valorizado' %} open{% endif %}>
-                        <summary
-                            class="nav-link nav-link--parent{% if url_name == 'inventario_visualizacion' or url_name == 'inventario_valorizado' %} active{% endif %}"
-                        >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M21 8l-9-5-9 5 9 5 9-5z"></path>
-                                <path d="M3 8v8l9 5 9-5V8"></path>
-                                <path d="M12 13v9"></path>
-                            </svg>
-                            <span>Inventario</span>
-                            {% comment %}
-                                Chevron: indica que el elemento se despliega. Gira 180
-                                grados al abrirse (ver .nav-group[open] en base.css).
-                            {% endcomment %}
-                            <svg class="nav-link__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M6 9l6 6 6-6"></path>
-                            </svg>
-                        </summary>
-                        <ul class="nav-submenu">
-                            <li><a href="{% url 'inventario_visualizacion' %}" class="nav-sublink{% if url_name == 'inventario_visualizacion' %} active{% endif %}">Existencias</a></li>
-                            <li><a href="{% url 'inventario_valorizado' %}" class="nav-sublink{% if url_name == 'inventario_valorizado' %} active{% endif %}">Inventario valorizado</a></li>
-                        </ul>
-                    </details>
-                    {% endwith %}
+                    <a
+                        href="{% url 'inventario_visualizacion' %}"
+                        class="nav-link{% if request.resolver_match.url_name == 'inventario_visualizacion' %} active{% endif %}"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 8l-9-5-9 5 9 5 9-5z"></path>
+                            <path d="M3 8v8l9 5 9-5V8"></path>
+                            <path d="M12 13v9"></path>
+                        </svg>
+                        <span>Inventario</span>
+                    </a>
                 </li>
                 <li>
                     {% with seccion_productos='productos_lista producto_crear producto_editar productos_edicion_masiva productos_importar' %}

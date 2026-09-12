@@ -1795,6 +1795,15 @@ tfoot td {
         box-shadow: var(--shadow-sm);
     }
 
+    /* El `display: block` de arriba le gana en especificidad al `display:
+       none` nativo del atributo `hidden` (viene del User-Agent stylesheet,
+       la prioridad mas baja de todas). Sin esto, una fila oculta por el
+       filtro u orden instantaneo en JS (`tr.hidden = true`) queda igual de
+       visible una vez la fila pasa a ser tarjeta en mobile. */
+    .tabla-cards tr[hidden] {
+        display: none !important;
+    }
+
     .tabla-cards td {
         display: flex;
         justify-content: space-between;

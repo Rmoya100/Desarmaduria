@@ -126,6 +126,27 @@
 .value-cell { font-weight: 700; color: var(--color-primary-dark); }
 .inventory-muted { color: var(--color-text-muted); font-style: italic; }
 .table-actions-cell { white-space: nowrap; }
+
+.table-panel__pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.85rem;
+}
+
+.table-panel__pager-tam,
+.table-panel__pager-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.table-panel__pager-tam select { min-height: 34px; padding: 4px 8px; }
+.table-panel__pager-nav .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .inventory-form-card { max-width: 680px; }
 .inventory-form-card h1 { margin-bottom: 20px; }
 
