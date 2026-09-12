@@ -16,6 +16,7 @@ from ..servicios.ingresos import (
     cantidades_por_pieza,
     catalogo_piezas,
     eliminar_ingreso,
+    precios_por_pieza,
     registrar_ingreso,
 )
 from .forms import (
@@ -69,9 +70,11 @@ def _piezas_permitidas(entrada):
     return piezas
 
 
-def _agrupar_por_categoria(piezas, cantidades, seleccionadas):
+def _agrupar_por_categoria(piezas, cantidades, seleccionadas, precios=None):
     """Estructura que consume la plantilla: una lista de categorias, cada una
-    con sus piezas y la cantidad tecleada (o guardada) de cada pieza."""
+    con sus piezas, la cantidad y el precio de venta estimado (tecleado o
+    guardado) de cada pieza."""
+    precios = precios or {}
     grupos = {}
     for pieza in piezas:
         grupo = grupos.setdefault(
@@ -83,8 +86,16 @@ def _agrupar_por_categoria(piezas, cantidades, seleccionadas):
             },
         )
         cantidad = cantidades.get(pieza.pk)
+        precio = precios.get(pieza.pk)
         grupo["piezas"].append(
-            {"pieza": pieza, "cantidad": "" if not cantidad else cantidad}
+            {
+                "pieza": pieza,
+                "cantidad": "" if not cantidad else cantidad,
+                # Sin str(): Django localiza los Decimal en el template
+                # (es-CL usa "," como separador decimal y "." como el de
+                # miles), lo que un <input type="number"> no acepta.
+                "precio": "" if precio is None else str(precio),
+            }
         )
     return sorted(
         grupos.values(), key=lambda grupo: grupo["categoria"].nombre_categoria
@@ -133,6 +144,7 @@ def _procesar_formulario(request, entrada, titulo, mensaje_exito):
                     form_lineas.lineas,
                     request.user,
                     fotos_por_pieza=form_lineas.fotos,
+                    precios_por_pieza=form_lineas.precios,
                 )
             except ValidationError as error:
                 form_lineas.add_error(None, error)
@@ -142,6 +154,7 @@ def _procesar_formulario(request, entrada, titulo, mensaje_exito):
                 messages.success(request, mensaje_exito)
                 return redirect("ingreso_detalle", pk=entrada.pk)
         cantidades = form_lineas.cantidades
+        precios = form_lineas.precios
         seleccionadas = {
             categoria.pk
             for categoria in form_categorias.cleaned_data.get("categorias", [])
@@ -152,6 +165,7 @@ def _procesar_formulario(request, entrada, titulo, mensaje_exito):
         form_categorias = CategoriasIngresoForm()
         form_lineas = None
         cantidades = cantidades_por_pieza(entrada) if entrada.pk else {}
+        precios = precios_por_pieza(entrada) if entrada.pk else {}
         if entrada.pk:
             # Al editar no se pre-marca ninguna categoria: se ven solo las
             # piezas ya cargadas y el resto se agrega desde el modal.
@@ -168,7 +182,7 @@ def _procesar_formulario(request, entrada, titulo, mensaje_exito):
         "form": form,
         "form_vehiculo": form_vehiculo,
         "form_lineas": form_lineas,
-        "grupos": _agrupar_por_categoria(piezas, cantidades, seleccionadas),
+        "grupos": _agrupar_por_categoria(piezas, cantidades, seleccionadas, precios),
         "marcas": Marca.objects.order_by("nombre_marca"),
         "modelos": Modelo.objects.order_by("nombre_modelo")
         .values_list("nombre_modelo", flat=True)

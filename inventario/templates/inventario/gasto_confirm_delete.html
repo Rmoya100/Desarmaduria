@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load monedas %}
 
 {% block title %}Eliminar gasto · Desarmaduría{% endblock %}
 
@@ -12,7 +13,7 @@
 <div class="form-card">
     <p>
         ¿Seguro que querés eliminar el gasto de
-        <strong>{{ object.concepto }}</strong> por <strong>${{ object.monto }}</strong>
+        <strong>{{ object.concepto }}</strong> por <strong>{{ object.monto|clp }}</strong>
         del {{ object.fecha }}? Esta acción no se puede deshacer.
     </p>
 

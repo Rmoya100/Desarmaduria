@@ -88,4 +88,9 @@ urlpatterns = [
     path('usuarios/documentos/nuevo/', catalogo_form, {'clave': 'documentos'}, name='documentos_crear'),
     path('usuarios/documentos/<int:pk>/editar/', catalogo_form, {'clave': 'documentos'}, name='documentos_editar'),
     path('usuarios/documentos/<int:pk>/eliminar/', catalogo_eliminar, {'clave': 'documentos'}, name='documentos_eliminar'),
+
+    path('usuarios/categorias/', catalogo_lista, {'clave': 'categorias'}, name='categorias'),
+    path('usuarios/categorias/nueva/', catalogo_form, {'clave': 'categorias'}, name='categorias_crear'),
+    path('usuarios/categorias/<int:pk>/editar/', catalogo_form, {'clave': 'categorias'}, name='categorias_editar'),
+    path('usuarios/categorias/<int:pk>/eliminar/', catalogo_eliminar, {'clave': 'categorias'}, name='categorias_eliminar'),
 ]

@@ -6,6 +6,8 @@ porque cada uno escribe en tablas distintas y porque el de cantidades no tiene
 campos fijos (depende del catalogo).
 """
 
+from decimal import Decimal, InvalidOperation
+
 from django import forms
 from django.utils import timezone
 
@@ -14,8 +16,10 @@ from ..services import ImagenInvalidaError, validar_imagen
 
 ANIO_MINIMO = 1900
 CANTIDAD_MAXIMA = 9999
+PRECIO_MAXIMO = Decimal("99999999.99")
 PREFIJO_CANTIDAD = "cantidad_"
 PREFIJO_FOTO = "foto_"
+PREFIJO_PRECIO = "precio_"
 
 
 def anio_maximo():
@@ -185,6 +189,7 @@ class LineasIngresoForm(forms.Form):
         self.cantidades = {}
         self.lineas = []
         self.fotos = {}
+        self.precios = {}
 
     def clean(self):
         datos = super().clean()
@@ -245,6 +250,42 @@ class LineasIngresoForm(forms.Form):
                 )
                 continue
             self.fotos[pieza.pk] = archivo
+
+        for clave in self.data:
+            if not clave.startswith(PREFIJO_PRECIO):
+                continue
+            identificador = clave[len(PREFIJO_PRECIO) :]
+            pieza = self.piezas.get(int(identificador)) if identificador.isdigit() else None
+            if pieza is None:
+                errores.append(
+                    "Se recibió un precio que no pertenece al catálogo mostrado."
+                )
+                continue
+            texto = (self.data.get(clave) or "").strip()
+            if not texto:
+                continue
+            try:
+                precio = Decimal(texto)
+            except InvalidOperation:
+                errores.append(
+                    f"El precio de venta de «{pieza.nombre}» debe ser un número válido."
+                )
+                continue
+            if precio < 0 or precio > PRECIO_MAXIMO:
+                errores.append(
+                    f"El precio de venta de «{pieza.nombre}» debe ser mayor o igual "
+                    "a 0."
+                )
+                continue
+            if self.cantidades.get(pieza.pk, 0) <= 0:
+                # Mismo criterio que la foto: sin cantidad > 0 la pieza no
+                # entra al ingreso, asi que el precio no tiene donde aplicarse.
+                errores.append(
+                    f"Pusiste un precio de venta para «{pieza.nombre}» pero no "
+                    "indicaste una cantidad mayor a 0: completala o quita el precio."
+                )
+                continue
+            self.precios[pieza.pk] = precio
 
         if not errores and not self.lineas:
             errores.append(

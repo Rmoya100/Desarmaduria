@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static monedas %}
 
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
 {% block title %}Ingreso #{{ entrada.pk }} · Desarmaduría{% endblock %}
@@ -55,16 +55,18 @@
                 <tr>
                     <th scope="col">Pieza</th>
                     <th scope="col" class="ingreso-tabla__cantidad">Cantidad</th>
+                    <th scope="col" class="ingreso-tabla__precio">Precio venta</th>
                 </tr>
             </thead>
             {% regroup detalles by producto.categoria.nombre_categoria as grupos %}
             {% for grupo in grupos %}
             <tbody>
-                <tr class="ingreso-grupo"><th scope="rowgroup" colspan="2">{{ grupo.grouper }}</th></tr>
+                <tr class="ingreso-grupo"><th scope="rowgroup" colspan="3">{{ grupo.grouper }}</th></tr>
                 {% for detalle in grupo.list %}
                 <tr>
                     <td>{{ detalle.producto.nombre }}</td>
                     <td class="ingreso-tabla__cantidad"><span class="stock-badge">{{ detalle.cantidad }}</span></td>
+                    <td class="ingreso-tabla__precio">{% if detalle.producto.precio_venta %}{{ detalle.producto.precio_venta|clp }}{% else %}—{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>

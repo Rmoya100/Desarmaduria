@@ -629,6 +629,31 @@ button:focus-visible {
     gap: var(--spacing-2);
 }
 
+/* El listado de Ventas deja los botones de fila solo con icono (sin texto)
+   para no perder espacio con varias columnas nuevas; mismo tamano que un
+   boton normal, sin el padding extra que dejaba el texto. */
+.table-actions .btn {
+    padding-left: var(--spacing-2);
+    padding-right: var(--spacing-2);
+}
+
+.venta-producto-linea:not(:last-child) {
+    margin-bottom: var(--spacing-1);
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-3);
+    margin-top: var(--spacing-4);
+}
+
+.pagination__estado {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -893,6 +918,21 @@ tfoot td {
     min-width: 0;
 }
 
+.venta-iva-resumen {
+    display: flex;
+    gap: var(--spacing-4);
+    margin: 0 0 var(--spacing-3);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius);
+    background: var(--color-info-bg);
+    color: var(--color-primary-dark);
+    font-size: 0.9rem;
+}
+
+.venta-iva-resumen[hidden] {
+    display: none;
+}
+
 .form-row .form-group label {
     text-transform: uppercase;
     font-size: 0.7rem;
@@ -972,6 +1012,13 @@ tfoot td {
     outline-offset: 1px;
 }
 
+.detalle-toolbar__estimado {
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
 .detalle-toolbar__agregar {
     flex-shrink: 0;
     background: var(--color-info-bg);
@@ -1035,6 +1082,10 @@ tfoot td {
     letter-spacing: 0.04em;
     color: var(--color-text-muted);
     z-index: 1;
+}
+
+.modal-producto__col-precio {
+    text-align: right;
 }
 
 .modal-producto__col-stock {

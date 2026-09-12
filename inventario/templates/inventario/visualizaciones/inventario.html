@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static monedas %}
 
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
 {% block title %}Inventario · Desarmaduría{% endblock %}
@@ -15,7 +15,6 @@
         <div class="filter-field"><label for="id_categoria">Categoría</label>{{ form.categoria }}</div>
         <div class="filter-field"><label for="id_marca">Marca</label>{{ form.marca }}</div>
         <div class="filter-field"><label for="id_modelo">Modelo</label>{{ form.modelo }}</div>
-        <div class="filter-field"><label for="id_estado">Estado</label>{{ form.estado }}</div>
     </div>
     <div class="inventory-toolbar__actions">
         <button type="submit" class="btn btn-primary">Aplicar filtros</button>
@@ -44,7 +43,7 @@
                 <td data-label="Entradas">{{ producto.total_entradas }}</td>
                 <td data-label="Vendidas">{{ producto.total_vendido }}</td>
                 <td data-label="Disponible"><span class="stock-badge{% if producto.stock_disponible <= 0 %} stock-badge--empty{% endif %}">{{ producto.stock_disponible }}</span></td>
-                <td data-label="Costo">${{ producto.costo|default:0|floatformat:0 }}</td>
+                <td data-label="Costo">{{ producto.costo|clp }}</td>
             </tr>
             {% empty %}<tr><td colspan="7" class="empty-state">No hay productos que coincidan con los filtros.</td></tr>{% endfor %}
             </tbody>

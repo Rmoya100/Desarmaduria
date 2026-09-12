@@ -363,6 +363,9 @@
 .ingreso-tabla__cantidad { width: 140px; text-align: right; }
 .ingreso-tabla__cantidad .input-control { width: 90px; text-align: right; }
 
+.ingreso-tabla__precio { width: 140px; text-align: right; }
+.ingreso-tabla__precio .input-control { width: 100px; text-align: right; }
+
 .ingreso-tabla__foto { width: 92px; text-align: center; white-space: nowrap; }
 .ingreso-tabla__foto .btn { padding: 2px 8px; }
 .ingreso-tabla__foto [data-foto-abrir].is-adjunta {
@@ -553,6 +556,8 @@
         text-align: left;
     }
 
+    .ingreso-tabla__precio { width: auto; }
+    .ingreso-tabla__precio .input-control { width: 90px; }
     .ingreso-tabla__foto { width: auto; }
 
     /* El buscador de piezas se queda encogido a su ancho intrinseco. */
@@ -678,6 +683,7 @@
        angostas y empujaban la tabla al scroll horizontal. */
     .ingreso-tabla__cantidad { width: auto; }
     .ingreso-tabla__cantidad .input-control { width: 70px; }
+    .ingreso-tabla__precio .input-control { width: 70px; }
 }
 
 .table-panel__acciones {
@@ -704,6 +710,8 @@
     cursor: pointer;
     font-size: 0.88rem;
 }
+
+.modal-pieza[hidden] { display: none; }
 
 .modal-pieza:last-of-type { border-bottom: 0; }
 .modal-pieza:hover { background: var(--color-info-bg, #eef4fb); }

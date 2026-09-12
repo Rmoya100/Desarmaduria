@@ -37,11 +37,11 @@ ANCHO_PAGINA_LISTADO = landscape(A4)[0] - 2 * 1.8 * cm
 
 
 def formato_monto(valor):
-    # "$" + number_format(-1025000, ...) da "$-1.025.000,00"; un monto
+    # "$" + number_format(-1025000, ...) da "$-1.025.000"; un monto
     # negativo (ej. utilidad del reporte) se escribe con el signo antes
     # del simbolo, no despues.
     negativo = valor < 0
-    formateado = number_format(abs(valor), decimal_pos=2, force_grouping=True)
+    formateado = number_format(abs(valor), decimal_pos=0, force_grouping=True)
     return f"-${formateado}" if negativo else f"${formateado}"
 
 
@@ -195,49 +195,64 @@ def _rango_legible(desde, hasta):
     return f"Del {desde} al {hasta}"
 
 
-def ventas_pdf_bytes(datos, desde, hasta):
-    """PDF listado de ventas de un rango de fechas, con su fila de total."""
-    encabezados = ["Fecha", "Documento", "Forma de pago", "Usuario", "Total"]
-    filas = [encabezados]
-    for venta in datos["ventas"]:
-        filas.append(
-            [
-                venta.fecha_venta.strftime("%d-%m-%Y"),
-                str(venta.tipo_documento),
-                str(venta.forma_pago),
-                str(venta.usuario),
-                formato_monto(venta.total_venta),
-            ]
-        )
-    filas.append(["", "", "", "Total", formato_monto(datos["total_general"])])
-
-    proporciones = [0.14, 0.22, 0.22, 0.22, 0.2]
-    anchos_columnas = [ANCHO_PAGINA_LISTADO * p for p in proporciones]
-
-    tabla = Table(filas, colWidths=anchos_columnas, repeatRows=1)
+def _fila_total_general(total_general, ancho=ANCHO_PAGINA_LISTADO):
+    """Fila final del listado de ventas en PDF, con el total de todas las
+    ventas del rango (misma suma que ya trae el listado en pantalla)."""
+    proporciones = [0.62, 0.19, 0.19]
+    anchos = [ancho * p for p in proporciones]
+    tabla = Table(
+        [["", "Total general", formato_monto(total_general)]],
+        colWidths=anchos,
+    )
     tabla.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("FONTNAME", (1, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("BACKGROUND", (0, 0), (-1, -1), COLOR_FILA_ALT),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
             ]
         )
     )
+    return tabla
 
+
+def ventas_pdf_bytes(datos, desde, hasta):
+    """PDF con el detalle completo de cada venta del rango (igual que su
+    comprobante individual, una detras de otra) y el total general al
+    final. Reusa las mismas tablas que arma venta_comprobante_pdf_bytes
+    para que ambos PDF se vean iguales para una misma venta."""
     generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
     estilos = getSampleStyleSheet()
     subtitulo = Paragraph(
         _rango_legible(desde, hasta),
         ParagraphStyle("Rango", parent=estilos["Normal"], textColor=COLOR_TEXTO_MUTED),
     )
+
+    contenido = [
+        _encabezado("Reporte de ventas", generado_en, ANCHO_PAGINA_LISTADO),
+        Spacer(1, 10),
+        subtitulo,
+        Spacer(1, 14),
+    ]
+    for venta in datos["ventas"]:
+        contenido += [
+            Paragraph(
+                f"Venta #{venta.pk}",
+                ParagraphStyle("TituloVentaListado", parent=estilos["Heading3"], textColor=COLOR_PRIMARIO_OSCURO),
+            ),
+            Spacer(1, 4),
+            _tabla_datos_venta(venta, ANCHO_PAGINA_LISTADO),
+            Spacer(1, 6),
+            *_flowables_observaciones_venta(venta, estilos),
+            _tabla_detalle_venta(venta, ANCHO_PAGINA_LISTADO),
+            Spacer(1, 18),
+        ]
+    contenido.append(_fila_total_general(datos["total_general"]))
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -248,15 +263,7 @@ def ventas_pdf_bytes(datos, desde, hasta):
         leftMargin=1.8 * cm,
         rightMargin=1.8 * cm,
     )
-    doc.build(
-        [
-            _encabezado("Reporte de ventas", generado_en, ANCHO_PAGINA_LISTADO),
-            Spacer(1, 10),
-            subtitulo,
-            Spacer(1, 10),
-            tabla,
-        ]
-    )
+    doc.build(contenido)
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -640,10 +647,10 @@ def gasto_comprobante_pdf_bytes(gasto):
     return buffer.getvalue()
 
 
-def venta_comprobante_pdf_bytes(venta):
-    """PDF de una pagina para UNA venta: sus datos generales y el detalle de
-    productos vendidos, con el total. Lo pide el boton "Guardar PDF" de la
-    vista de comprobante individual de Ventas."""
+def _tabla_datos_venta(venta, ancho=ANCHO_PAGINA_COMPROBANTE):
+    """Mini tabla de 4 columnas con los datos generales de una venta (fecha,
+    tipo de documento, forma de pago, usuario). La reusan el comprobante
+    individual y el listado completo de ventas en PDF."""
     estilos = getSampleStyleSheet()
     estilo_etiqueta = ParagraphStyle(
         "EtiquetaVenta",
@@ -666,16 +673,16 @@ def venta_comprobante_pdf_bytes(venta):
         str(venta.forma_pago),
         str(venta.usuario),
     ]
-    ancho_columna = ANCHO_PAGINA_COMPROBANTE / len(etiquetas)
+    ancho_columna = ancho / len(etiquetas)
 
-    tabla_datos = Table(
+    tabla = Table(
         [
             [Paragraph(etq, estilo_etiqueta) for etq in etiquetas],
             [Paragraph(val, estilo_valor) for val in valores],
         ],
         colWidths=[ancho_columna] * len(etiquetas),
     )
-    tabla_datos.setStyle(
+    tabla.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
@@ -690,14 +697,21 @@ def venta_comprobante_pdf_bytes(venta):
             ]
         )
     )
+    return tabla
 
-    encabezados_detalle = ["Producto", "Cantidad", "Precio", "Subtotal"]
-    filas_detalle = [encabezados_detalle]
+
+def _tabla_detalle_venta(venta, ancho=ANCHO_PAGINA_COMPROBANTE):
+    """Tabla de detalle de productos de una venta (Producto/Cantidad/Precio/
+    Subtotal) con el pie de Neto/IVA/Total si la venta lleva IVA, o solo
+    Total si es en efectivo. La reusan el comprobante individual y el
+    listado completo de ventas en PDF."""
+    encabezados = ["Producto", "Cantidad", "Precio", "Subtotal"]
+    filas = [encabezados]
     total = Decimal("0")
     for detalle in venta.detalles.select_related("producto__vehiculo__modelo__marca").all():
-        subtotal = detalle.cantidad * detalle.precio
+        subtotal = detalle.subtotal
         total += subtotal
-        filas_detalle.append(
+        filas.append(
             [
                 str(detalle.producto),
                 str(detalle.cantidad),
@@ -705,12 +719,17 @@ def venta_comprobante_pdf_bytes(venta):
                 formato_monto(subtotal),
             ]
         )
-    filas_detalle.append(["", "", "Total", formato_monto(total)])
+    if venta.monto_total is not None:
+        filas.append(["", "", "Neto", formato_monto(venta.monto_neto)])
+        filas.append(["", "", "IVA (19%)", formato_monto(venta.monto_iva)])
+        filas.append(["", "", "Total", formato_monto(venta.monto_total)])
+    else:
+        filas.append(["", "", "Total", formato_monto(total)])
 
-    proporciones_detalle = [0.46, 0.16, 0.19, 0.19]
-    anchos_detalle = [ANCHO_PAGINA_COMPROBANTE * p for p in proporciones_detalle]
-    tabla_detalle = Table(filas_detalle, colWidths=anchos_detalle, repeatRows=1)
-    tabla_detalle.setStyle(
+    proporciones = [0.46, 0.16, 0.19, 0.19]
+    anchos = [ancho * p for p in proporciones]
+    tabla = Table(filas, colWidths=anchos, repeatRows=1)
+    tabla.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
@@ -726,6 +745,28 @@ def venta_comprobante_pdf_bytes(venta):
             ]
         )
     )
+    return tabla
+
+
+def _flowables_observaciones_venta(venta, estilos):
+    """Parrafo "Observaciones: ..." de una venta, si tiene, mas su espaciador.
+    Mismo criterio que gasto_comprobante_pdf_bytes: se omite por completo si
+    la venta no tiene observaciones cargadas."""
+    if not venta.observaciones:
+        return []
+    return [
+        Paragraph(f"<b>Observaciones:</b> {venta.observaciones}", estilos["Normal"]),
+        Spacer(1, 16),
+    ]
+
+
+def venta_comprobante_pdf_bytes(venta):
+    """PDF de una pagina para UNA venta: sus datos generales y el detalle de
+    productos vendidos, con el total. Lo pide el boton "Guardar PDF" de la
+    vista de comprobante individual de Ventas."""
+    estilos = getSampleStyleSheet()
+    tabla_datos = _tabla_datos_venta(venta)
+    tabla_detalle = _tabla_detalle_venta(venta)
 
     generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
     buffer = BytesIO()
@@ -749,6 +790,7 @@ def venta_comprobante_pdf_bytes(venta):
             Spacer(1, 8),
             tabla_datos,
             Spacer(1, 16),
+            *_flowables_observaciones_venta(venta, estilos),
             tabla_detalle,
         ]
     )

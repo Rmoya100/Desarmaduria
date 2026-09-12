@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import uuid4
 
 from django.conf import settings
@@ -437,6 +438,9 @@ class ProductoFoto(models.Model):
 # ---------------------------------------------------------------------------
 # Ventas
 # ---------------------------------------------------------------------------
+IVA_TASA = Decimal("0.19")
+
+
 class FormaPago(models.Model):
     id_forma_pago = models.AutoField(primary_key=True, db_column="idFormaPago")
     forma_pago = models.CharField(
@@ -448,6 +452,15 @@ class FormaPago(models.Model):
 
     def __str__(self):
         return self.forma_pago
+
+    def aplica_iva(self):
+        """Las ventas pagadas con transferencia o tarjeta llevan 19% de IVA
+        extra; en efectivo no. "Forma de pago" es una lista libre que el
+        usuario administra en Configuración (no un enum fijo), asi que la
+        regla se decide por texto en este unico lugar, para no duplicarla
+        en el form, las vistas y el JS del formulario de venta."""
+        texto = self.forma_pago.lower()
+        return "transferencia" in texto or "tarjeta" in texto
 
 
 class TipoDocumento(models.Model):
@@ -489,12 +502,47 @@ class Venta(models.Model):
     fecha_registro = models.DateTimeField(
         auto_now_add=True, db_column="fechaRegistro"
     )
+    observaciones = models.CharField(
+        max_length=200, null=True, blank=True, db_column="observaciones"
+    )
+    # Solo se completan (quedan en None si no) cuando forma_pago.aplica_iva()
+    # es True. Los llena actualizar_montos() -no se escriben a mano en
+    # ningun formulario- a partir de la suma del detalle de productos, y
+    # quedan guardados asi para que no cambien retroactivamente si mas
+    # adelante cambia el texto de la forma de pago o la tasa de IVA.
+    monto_neto = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True, db_column="montoNeto"
+    )
+    monto_iva = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True, db_column="montoIva"
+    )
+    monto_total = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True, db_column="montoTotal"
+    )
 
     class Meta:
         db_table = "venta"
 
     def __str__(self):
         return f"Venta #{self.id_venta} ({self.fecha_venta})"
+
+    def actualizar_montos(self):
+        """Neto = suma de cantidad*precio del detalle de productos (el mismo
+        numero que ya se usaba como Total en una venta en efectivo); si la
+        forma de pago lleva IVA (FormaPago.aplica_iva) se le suma el 19%
+        para el total. Se llama desde las vistas de crear/editar venta
+        despues de guardar el formset del detalle, porque hasta ese momento
+        no esta escrito en la base."""
+        neto = sum((d.subtotal for d in self.detalles.all()), Decimal("0"))
+        if self.forma_pago.aplica_iva():
+            self.monto_neto = neto
+            self.monto_iva = (neto * IVA_TASA).quantize(Decimal("0.01"))
+            self.monto_total = neto + self.monto_iva
+        else:
+            self.monto_neto = None
+            self.monto_iva = None
+            self.monto_total = None
+        self.save(update_fields=["monto_neto", "monto_iva", "monto_total"])
 
 
 class DetalleVenta(models.Model):
@@ -517,9 +565,25 @@ class DetalleVenta(models.Model):
     precio = models.DecimalField(
         max_digits=10, decimal_places=2, db_column="precio"
     )
+    # Snapshot de Producto.precio_venta al momento de vender (no un campo de
+    # formulario: lo completa DetalleVentaForm.clean()). Sirve para comparar
+    # despues si se vendio al precio estimado o si cambio, sin que esa
+    # comparacion se corrompa si el precio_venta del producto cambia mas
+    # adelante.
+    precio_estimado = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        db_column="precioEstimado",
+    )
 
     class Meta:
         db_table = "detalleVenta"
+
+    @property
+    def subtotal(self):
+        return self.cantidad * self.precio
 
     def clean(self):
         from django.core.exceptions import ValidationError

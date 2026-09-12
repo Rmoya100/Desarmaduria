@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static monedas %}
 
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
 {% block title %}Edición masiva · Inventario{% endblock %}
@@ -81,8 +81,8 @@
                     <td><strong>{{ producto.nombre }}</strong></td>
                     <td>{{ producto.categoria.nombre_categoria }}</td>
                     <td>{% if producto.vehiculo %}{{ producto.vehiculo }}{% else %}<span class="inventory-muted">Sin vehículo</span>{% endif %}</td>
-                    <td>${{ producto.costo|default:0|floatformat:0 }}</td>
-                    <td>{% if producto.precio_venta is not None %}${{ producto.precio_venta|floatformat:0 }}{% else %}<span class="inventory-muted">—</span>{% endif %}</td>
+                    <td>{{ producto.costo|clp }}</td>
+                    <td>{% if producto.precio_venta is not None %}{{ producto.precio_venta|clp }}{% else %}<span class="inventory-muted">—</span>{% endif %}</td>
                 </tr>
                 {% empty %}<tr><td colspan="7" class="empty-state">No hay productos que coincidan con el filtro.</td></tr>{% endfor %}
                 </tbody>

@@ -67,7 +67,7 @@ def ventas_exportar_excel(request):
     ws.cell(row=fila_total, column=5, value=datos["total_general"]).font = Font(bold=True)
     for fila in ws.iter_rows(min_row=2, min_col=5, max_col=5):
         for celda in fila:
-            celda.number_format = "#,##0.00"
+            celda.number_format = "#,##0"
     for columna, ancho in {"A": 12, "B": 16, "C": 16, "D": 16, "E": 14}.items():
         ws.column_dimensions[columna].width = ancho
 
@@ -128,7 +128,7 @@ def utilidad_exportar_excel(request):
     ws.cell(row=fila_total, column=4, value=datos["total_utilidad"]).font = Font(bold=True)
     for fila in ws.iter_rows(min_row=2, min_col=2, max_col=4):
         for celda in fila:
-            celda.number_format = "#,##0.00"
+            celda.number_format = "#,##0"
     for columna, ancho in {"A": 14, "B": 16, "C": 16, "D": 16}.items():
         ws.column_dimensions[columna].width = ancho
 
@@ -190,7 +190,7 @@ def caja_exportar_excel(request):
     ws.cell(row=fila_total, column=4, value=datos["total_utilidad"]).font = Font(bold=True)
     for fila in ws.iter_rows(min_row=2, min_col=2, max_col=5):
         for celda in fila:
-            celda.number_format = "#,##0.00"
+            celda.number_format = "#,##0"
     for columna, ancho in {"A": 14, "B": 16, "C": 16, "D": 16, "E": 18}.items():
         ws.column_dimensions[columna].width = ancho
 
@@ -203,7 +203,7 @@ def caja_exportar_excel(request):
     for etiqueta, valor in etiquetas:
         ws.cell(row=fila_saldo, column=1, value=etiqueta).font = Font(bold=True)
         celda_valor = ws.cell(row=fila_saldo, column=2, value=valor)
-        celda_valor.number_format = "#,##0.00"
+        celda_valor.number_format = "#,##0"
         fila_saldo += 1
 
     response = HttpResponse(

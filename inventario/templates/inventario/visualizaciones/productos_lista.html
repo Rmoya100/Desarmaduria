@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static monedas %}
 
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
 {% block title %}Productos · Inventario{% endblock %}
@@ -106,8 +106,8 @@
                         <span class="badge badge-muted" title="Plantilla reutilizable del catálogo: no representa stock físico por sí sola">Plantilla de catálogo</span>
                         {% endif %}
                     </td>
-                    <td data-label="Costo">${{ producto.costo|default:0|floatformat:0 }}</td>
-                    <td data-label="Precio venta">{% if producto.precio_venta is not None %}${{ producto.precio_venta|floatformat:0 }}{% else %}<span class="inventory-muted">—</span>{% endif %}</td>
+                    <td data-label="Costo">{{ producto.costo|clp }}</td>
+                    <td data-label="Precio venta">{% if producto.precio_venta is not None %}{{ producto.precio_venta|clp }}{% else %}<span class="inventory-muted">—</span>{% endif %}</td>
                     <td class="table-actions-cell"><a href="#editar-{{ producto.pk }}" class="btn btn-sm" data-modal-open="editar-{{ producto.pk }}">Editar</a><a href="#eliminar-{{ producto.pk }}" class="btn btn-sm btn-danger" data-modal-open="eliminar-{{ producto.pk }}">Eliminar</a></td>
                 </tr>
                 {% empty %}<tr><td colspan="8" class="empty-state">No hay productos registrados.</td></tr>{% endfor %}

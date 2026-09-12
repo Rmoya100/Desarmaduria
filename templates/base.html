@@ -169,7 +169,7 @@
                         <span>Reportes</span>
                     </a>
                 </li>
-                {% if request.user|tiene_permiso:"usuarios:ver" or request.user|tiene_permiso:"roles:ver" or request.user|tiene_permiso:"formas_pago:ver" or request.user|tiene_permiso:"documentos:ver" %}
+                {% if request.user|tiene_permiso:"usuarios:ver" or request.user|tiene_permiso:"roles:ver" or request.user|tiene_permiso:"formas_pago:ver" or request.user|tiene_permiso:"documentos:ver" or request.user|tiene_permiso:"categorias:ver" %}
                 <li>
                     <a
                         href="{% url 'usuarios' %}"
