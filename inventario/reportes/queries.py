@@ -277,11 +277,90 @@ def saldo_caja(hasta):
     return monto_base + total_ventas - total_gastos
 
 
+def _lineas_venta_con_iva(venta):
+    """Detalle de una venta con el IVA de la boleta prorrateado entre sus
+    lineas de producto (proporcional al neto de cada linea). La ultima
+    linea absorbe el resto del redondeo para que la suma de iva de todas
+    las lineas cuadre exacto con venta.monto_iva."""
+    detalles = list(venta.detalles.all())
+    if not venta.monto_iva or not venta.monto_neto:
+        return [(detalle, Decimal("0")) for detalle in detalles]
+
+    lineas = []
+    iva_acumulado = Decimal("0")
+    for i, detalle in enumerate(detalles):
+        if i < len(detalles) - 1:
+            iva_linea = (
+                detalle.subtotal / venta.monto_neto * venta.monto_iva
+            ).quantize(Decimal("1"))
+            iva_acumulado += iva_linea
+        else:
+            iva_linea = venta.monto_iva - iva_acumulado
+        lineas.append((detalle, iva_linea))
+    return lineas
+
+
+def movimientos_por_periodo(desde, hasta):
+    """Detalle linea a linea de cada producto vendido (con su neto/iva/
+    total) y cada gasto del rango, agrupado por periodo de negocio
+    (inicio_de_periodo). Es el insumo del libro de movimientos del Excel
+    de Caja: reporte_caja ya tiene los subtotales por periodo, esto agrega
+    el detalle transaccion por transaccion detras de esos subtotales."""
+    ventas = Venta.objects.filter(
+        fecha_venta__gte=desde, fecha_venta__lte=hasta
+    ).prefetch_related("detalles__producto__vehiculo__modelo__marca")
+    gastos = Gasto.objects.filter(fecha__gte=desde, fecha__lte=hasta).select_related("concepto")
+
+    por_periodo = {}
+    for venta in ventas:
+        periodo = inicio_de_periodo(venta.fecha_venta)
+        movimientos = por_periodo.setdefault(periodo, [])
+        for detalle, iva_linea in _lineas_venta_con_iva(venta):
+            movimientos.append(
+                {
+                    "fecha": venta.fecha_venta,
+                    "movimiento": "Ingreso",
+                    "concepto": "Venta",
+                    "producto_motivo": str(detalle.producto),
+                    "numero_documento": "0",
+                    "neto": detalle.subtotal,
+                    "iva": iva_linea,
+                    "total": detalle.subtotal + iva_linea,
+                }
+            )
+    for gasto in gastos:
+        periodo = inicio_de_periodo(gasto.fecha)
+        por_periodo.setdefault(periodo, []).append(
+            {
+                "fecha": gasto.fecha,
+                "movimiento": "Gasto",
+                "concepto": str(gasto.concepto),
+                "producto_motivo": gasto.observaciones or "—",
+                "numero_documento": gasto.numero_documento or "0",
+                "neto": -gasto.monto,
+                "iva": Decimal("0"),
+                "total": -gasto.monto,
+            }
+        )
+
+    for movimientos in por_periodo.values():
+        movimientos.sort(key=lambda m: m["fecha"])
+    return por_periodo
+
+
 def reporte_caja(desde, hasta):
     """Utilidad mes a mes (reutiliza reporte_utilidad) mas el saldo en caja
     acumulado: cada fila arrastra el saldo del mes anterior, partiendo del
-    saldo justo antes de `desde`."""
+    saldo justo antes de `desde`. Ademas del neto por periodo, incluye el
+    desglose de ingresos (reporte_ventas) y gastos por concepto
+    (reporte_gastos_por_concepto) de todo el rango -usados por el PDF y la
+    pantalla- y el detalle linea a linea de movimientos por periodo
+    (movimientos_por_periodo), usado por el libro de movimientos del
+    Excel."""
     datos = reporte_utilidad(desde, hasta)
+    ingresos = reporte_ventas(desde, hasta)
+    gastos_por_concepto = reporte_gastos_por_concepto(desde, hasta)
+    movimientos = movimientos_por_periodo(desde, hasta)
     saldo_inicial = SaldoInicial.objects.first()
 
     inicio_arrastre = date.fromisoformat(desde) if isinstance(desde, str) else desde
@@ -296,6 +375,9 @@ def reporte_caja(desde, hasta):
 
     return {
         **datos,
+        "ingresos": ingresos,
+        "gastos_por_concepto": gastos_por_concepto,
+        "movimientos_por_periodo": movimientos,
         "saldo_inicial": saldo_inicial,
         "saldo_antes_del_periodo": saldo_antes_del_periodo,
         "saldo_actual": saldo_acumulado,

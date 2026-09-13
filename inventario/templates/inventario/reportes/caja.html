@@ -70,7 +70,79 @@
     </div>
 </div>
 
+<div class="dashboard-grid">
+    <section class="panel">
+        <h2>Ingresos por forma de pago</h2>
+        {% if ingresos.por_forma_pago %}
+        <table class="tabla-cards tabla-cards--plana">
+            <thead><tr><th>Forma de pago</th><th>Total</th><th>IVA</th></tr></thead>
+            <tbody>
+                {% for fila in ingresos.por_forma_pago %}
+                <tr>
+                    <td data-label="Forma de pago">{{ fila.forma_pago__forma_pago }}</td>
+                    <td data-label="Total">{{ fila.total|clp }}</td>
+                    <td data-label="IVA">{% if fila.iva %}{{ fila.iva|clp }}{% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr><td><strong>Total</strong></td><td><strong>{{ ingresos.total_general|clp }}</strong></td><td><strong>{{ ingresos.total_iva|clp }}</strong></td></tr>
+            </tfoot>
+        </table>
+        {% else %}
+        <div class="empty-state">Sin ventas en el rango seleccionado.</div>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <h2>Ingresos por tipo de documento</h2>
+        {% if ingresos.por_tipo_documento %}
+        <table class="tabla-cards tabla-cards--plana">
+            <thead><tr><th>Documento</th><th>Total</th></tr></thead>
+            <tbody>
+                {% for fila in ingresos.por_tipo_documento %}
+                <tr>
+                    <td data-label="Documento">{{ fila.tipo_documento__tipo_documento }}</td>
+                    <td data-label="Total">{{ fila.total|clp }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr><td><strong>Total</strong></td><td><strong>{{ ingresos.total_general|clp }}</strong></td></tr>
+            </tfoot>
+        </table>
+        {% else %}
+        <div class="empty-state">Sin ventas en el rango seleccionado.</div>
+        {% endif %}
+    </section>
+</div>
+
+<div class="dashboard-grid">
+    <section class="panel">
+        <h2>Gastos por concepto</h2>
+        {% if gastos_por_concepto.conceptos %}
+        <table class="tabla-cards tabla-cards--plana">
+            <thead><tr><th>Concepto</th><th>Total</th></tr></thead>
+            <tbody>
+                {% for concepto in gastos_por_concepto.conceptos %}
+                <tr>
+                    <td data-label="Concepto">{{ concepto.nombre }}</td>
+                    <td data-label="Total">{{ concepto.total|clp }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr><td><strong>Total</strong></td><td><strong>{{ gastos_por_concepto.total_general|clp }}</strong></td></tr>
+            </tfoot>
+        </table>
+        {% else %}
+        <div class="empty-state">Sin gastos en el rango seleccionado.</div>
+        {% endif %}
+    </section>
+</div>
+
 {% if filas %}
+<h2>Evolución por período</h2>
 <table class="tabla-cards">
     <thead>
         <tr>

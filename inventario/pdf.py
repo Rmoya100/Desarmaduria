@@ -388,6 +388,52 @@ def caja_pdf_bytes(datos, desde, hasta):
         )
     )
 
+    estilo_seccion = ParagraphStyle("SeccionCaja", parent=estilos["Heading2"], textColor=COLOR_PRIMARIO_OSCURO)
+
+    ingresos = datos["ingresos"]
+    filas_forma_pago = [
+        [
+            fila["forma_pago__forma_pago"],
+            formato_monto(fila["total"]),
+            formato_monto(fila["iva"]) if fila["iva"] else "—",
+        ]
+        for fila in ingresos["por_forma_pago"]
+    ]
+    filas_forma_pago.append(
+        ["Total", formato_monto(ingresos["total_general"]), formato_monto(ingresos["total_iva"])]
+    )
+
+    filas_tipo_doc = [
+        [fila["tipo_documento__tipo_documento"], formato_monto(fila["total"])]
+        for fila in ingresos["por_tipo_documento"]
+    ]
+    filas_tipo_doc.append(["Total", formato_monto(ingresos["total_general"])])
+
+    gastos_concepto = datos["gastos_por_concepto"]
+    filas_gastos = [[c["nombre"], formato_monto(c["total"])] for c in gastos_concepto["conceptos"]]
+    filas_gastos.append(["Total", formato_monto(gastos_concepto["total_general"])])
+
+    bloque_ingresos = [
+        Paragraph("Ingresos (ventas)", estilo_seccion),
+        Spacer(1, 8),
+        *_tabla_seccion(
+            "Por forma de pago", ["Forma de pago", "Total", "IVA"], filas_forma_pago,
+            ANCHO_PAGINA_COMPROBANTE, [0.4, 0.3, 0.3],
+        ),
+        *_tabla_seccion(
+            "Por tipo de documento", ["Documento", "Total"], filas_tipo_doc,
+            ANCHO_PAGINA_COMPROBANTE, [0.6, 0.4],
+        ),
+    ]
+    bloque_gastos = [
+        Paragraph("Gastos", estilo_seccion),
+        Spacer(1, 8),
+        *_tabla_seccion(
+            "Por concepto", ["Concepto", "Total"], filas_gastos,
+            ANCHO_PAGINA_COMPROBANTE, [0.6, 0.4],
+        ),
+    ]
+
     encabezados = ["Período", "Ventas", "Gastos", "Utilidad", "Saldo acumulado"]
     filas = [encabezados]
     for fila in datos["filas"]:
@@ -452,7 +498,11 @@ def caja_pdf_bytes(datos, desde, hasta):
             subtitulo,
             Spacer(1, 14),
             resumen_saldo,
-            Spacer(1, 14),
+            Spacer(1, 18),
+            *bloque_ingresos,
+            *bloque_gastos,
+            Paragraph("Evolución por período", estilo_seccion),
+            Spacer(1, 8),
             tabla,
         ]
     )
@@ -493,6 +543,46 @@ def _tabla_rotacion(titulo, productos):
         Paragraph(
             titulo,
             ParagraphStyle("Subtitulo", parent=estilos["Heading3"], textColor=COLOR_PRIMARIO_OSCURO),
+        ),
+        Spacer(1, 6),
+        tabla,
+        Spacer(1, 16),
+    ]
+
+
+def _tabla_seccion(titulo, encabezados, filas_datos, ancho, proporciones=None):
+    """Tabla con titulo + fila Total en negrita, alineada a la derecha en
+    las columnas de monto. La usan los desgloses de ingresos/gastos del
+    flujo de caja, que necesitan varias tablas chicas con el mismo estilo
+    en vez de una tabla grande como el resto de los reportes."""
+    anchos = (
+        [ancho * p for p in proporciones]
+        if proporciones
+        else [ancho / len(encabezados)] * len(encabezados)
+    )
+    tabla = Table([encabezados] + filas_datos, colWidths=anchos, repeatRows=1)
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    estilos = getSampleStyleSheet()
+    return [
+        Paragraph(
+            titulo,
+            ParagraphStyle("SubtituloCaja", parent=estilos["Heading3"], textColor=COLOR_PRIMARIO_OSCURO),
         ),
         Spacer(1, 6),
         tabla,
