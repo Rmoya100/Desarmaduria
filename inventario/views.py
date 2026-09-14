@@ -713,7 +713,9 @@ def _productos_json():
     productos_con_stock() (el mismo calculo que usa el dashboard, que ya
     trae select_related de vehiculo) en vez de duplicar la logica de stock.
     Se recalcula en cada request: son pocas filas y asi nunca queda
-    desactualizado tras crear/eliminar un producto o registrar una venta."""
+    desactualizado tras crear/eliminar un producto o registrar una venta.
+    Solo trae productos con stock: no tiene sentido ofrecer para agregar a
+    una venta algo que no hay como entregar."""
     return [
         {
             "id_producto": p.id_producto,
@@ -722,7 +724,7 @@ def _productos_json():
             "stock_disponible": p.stock_disponible,
             "precio_venta": p.precio_venta,
         }
-        for p in productos_con_stock()
+        for p in productos_con_stock().filter(stock_disponible__gt=0)
     ]
 
 

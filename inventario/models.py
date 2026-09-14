@@ -526,6 +526,20 @@ class Venta(models.Model):
     def __str__(self):
         return f"Venta #{self.id_venta} ({self.fecha_venta})"
 
+    @property
+    def vehiculos(self):
+        """Vehiculos unicos de los productos de esta venta, sin repetir, en
+        el orden en que aparecen (el listado de ventas los agrupa asi: si
+        hay varios productos del mismo vehiculo, se muestra una sola vez)."""
+        vistos = []
+        ids_vistos = set()
+        for detalle in self.detalles.all():
+            vehiculo = detalle.producto.vehiculo
+            if vehiculo and vehiculo.pk not in ids_vistos:
+                ids_vistos.add(vehiculo.pk)
+                vistos.append(vehiculo)
+        return vistos
+
     def actualizar_montos(self):
         """Neto = suma de cantidad*precio del detalle de productos (el mismo
         numero que ya se usaba como Total en una venta en efectivo); si la
@@ -592,7 +606,13 @@ class DetalleVenta(models.Model):
             return
         from .servicios.inventario import productos_con_stock
 
-        producto = productos_con_stock().get(pk=self.producto_id)
+        try:
+            producto = productos_con_stock().get(pk=self.producto_id)
+        except Producto.DoesNotExist:
+            # El producto de esta linea fue eliminado del catalogo despues
+            # de la venta: no hay stock que validar contra el, asi que no se
+            # bloquea la edicion de la linea historica.
+            return
         stock = producto.stock_disponible
         if self.pk:
             stock += self.cantidad

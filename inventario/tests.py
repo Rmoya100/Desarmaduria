@@ -529,6 +529,7 @@ class ProductosJsonVentaTests(TestCase):
     `renderizarListaModal`)."""
 
     def test_incluye_vehiculo_para_distinguir_productos_repetidos(self):
+        usuario = crear_usuario("productos_json_test")
         categoria = Categoria.objects.create(nombre_categoria="Motor")
         vehiculo = Vehiculo.objects.create(
             modelo=Modelo.objects.create(
@@ -537,8 +538,17 @@ class ProductosJsonVentaTests(TestCase):
             anio_desde=2007,
             anio_hasta=2012,
         )
-        Producto.objects.create(categoria=categoria, nombre="Alternador", vehiculo=vehiculo)
-        Producto.objects.create(categoria=categoria, nombre="Alternador")  # plantilla
+        con_vehiculo = Producto.objects.create(
+            categoria=categoria, nombre="Alternador", vehiculo=vehiculo
+        )
+        sin_vehiculo = Producto.objects.create(categoria=categoria, nombre="Alternador")  # plantilla
+
+        # _productos_json() solo trae productos con stock (ver
+        # _productos_json en views.py): sin esto ninguno de los dos
+        # aparecería y el test no probaría lo que dice probar.
+        entrada = Entrada.objects.create(fecha="2026-01-01", usuario=usuario)
+        DetalleEntrada.objects.create(entrada=entrada, producto=con_vehiculo, cantidad=1)
+        DetalleEntrada.objects.create(entrada=entrada, producto=sin_vehiculo, cantidad=1)
 
         datos = _productos_json()
         con_vehiculo = [d for d in datos if d["nombre"] == "ALTERNADOR" and d["vehiculo"]]

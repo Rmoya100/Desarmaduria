@@ -70,7 +70,7 @@ class GastoForm(forms.ModelForm):
             "imagen",
         ]
         widgets = {
-            "fecha": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "fecha": forms.DateInput(format="%Y-%m-%d", attrs={"class": "form-control", "type": "date"}),
             "monto": forms.NumberInput(
                 attrs={"class": "form-control", "step": "0.01", "min": "0"}
             ),
@@ -113,7 +113,7 @@ class SaldoInicialForm(forms.ModelForm):
             "monto": forms.NumberInput(
                 attrs={"class": "form-control", "step": "0.01", "min": "0"}
             ),
-            "fecha": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "fecha": forms.DateInput(format="%Y-%m-%d", attrs={"class": "form-control", "type": "date"}),
             "observaciones": forms.Textarea(
                 attrs={"class": "form-control", "rows": 3}
             ),
@@ -251,7 +251,7 @@ class EntradaForm(EstiloFormMixin, forms.ModelForm):
         model = Entrada
         fields = ["fecha", "marca", "modelo", "vehiculo", "tipo_documento"]
         widgets = {
-            "fecha": forms.DateInput(attrs={"type": "date"}),
+            "fecha": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
             "vehiculo": VehiculoSelect,
         }
 
@@ -323,7 +323,10 @@ class VentaForm(EstiloFormMixin, forms.ModelForm):
         model = Venta
         fields = ["fecha_venta", "tipo_documento", "forma_pago", "observaciones"]
         widgets = {
-            "fecha_venta": forms.DateInput(attrs={"type": "date"}),
+            # format explicito: sin esto Django renderiza el value con el
+            # formato local (11/09/2026), que un <input type="date"> no
+            # reconoce y deja el campo en blanco al editar una venta.
+            "fecha_venta": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
             "observaciones": forms.Textarea(attrs={"rows": 2}),
         }
 
@@ -345,6 +348,18 @@ class DetalleVentaForm(EstiloFormMixin, forms.ModelForm):
             "cantidad": forms.HiddenInput(),
             "precio": forms.HiddenInput(),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Una linea existente puede apuntar a un producto que fue eliminado
+        # despues de la venta original. El queryset de arriba lo excluiria y
+        # bloquearia el guardado de la venta completa (incluso editando otro
+        # campo) sin mostrar ningun error visible. Se vuelve a incluir solo
+        # el producto ya asociado a esta linea puntual.
+        if self.instance.pk and self.instance.producto_id:
+            self.fields["producto"].queryset = self.fields["producto"].queryset | Producto.objects.filter(
+                pk=self.instance.producto_id
+            )
 
     def clean(self):
         cleaned_data = super().clean()

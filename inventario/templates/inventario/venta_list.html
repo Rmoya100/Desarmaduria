@@ -70,8 +70,10 @@
             <td data-label="Forma de pago">{{ venta.forma_pago }}</td>
             <td data-label="Usuario">{{ venta.usuario }}</td>
             <td data-label="Vehículo">
-                {% for detalle in venta.detalles.all %}
-                <div class="venta-producto-linea">{{ detalle.producto.vehiculo|default:"—" }}</div>
+                {% for vehiculo in venta.vehiculos %}
+                <div class="venta-producto-linea">{{ vehiculo }}</div>
+                {% empty %}
+                —
                 {% endfor %}
             </td>
             <td data-label="Observaciones">

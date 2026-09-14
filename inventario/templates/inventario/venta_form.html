@@ -127,6 +127,11 @@
                         <button type="button" class="btn btn-danger btn-sm" data-formset-remove>Quitar</button>
                     </td>
                 </tr>
+                {% if detalle_form.errors %}
+                <tr class="formset-row-error">
+                    <td colspan="6" class="form-error">{{ detalle_form.errors|striptags }}</td>
+                </tr>
+                {% endif %}
                 {% endfor %}
             </tbody>
             <tfoot>

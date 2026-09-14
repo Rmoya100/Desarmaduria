@@ -961,13 +961,13 @@ tfoot td {
     border-radius: var(--radius);
     padding: var(--spacing-3);
     margin-bottom: var(--spacing-3);
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 
 .detalle-toolbar__buscador {
     position: relative;
     flex: 1;
-    min-width: 0;
+    min-width: 180px;
     display: flex;
     align-items: center;
     gap: var(--spacing-2);
