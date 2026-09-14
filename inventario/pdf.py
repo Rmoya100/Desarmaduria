@@ -1,0 +1,857 @@
+"""Generacion de PDFs del modulo Gastos. Separado de views.py para que las
+vistas solo se ocupen de "que datos exportar" y este archivo de "como se ve
+el PDF" (colores, fuentes, layout de la tabla)."""
+
+from decimal import Decimal
+from io import BytesIO
+
+from django.contrib.staticfiles import finders
+from django.utils import timezone
+from django.utils.formats import number_format
+from PIL import Image as PILImage
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    Image as RLImage,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
+NOMBRE_EMPRESA = "Desarmaduría Puente Alto"
+
+COLOR_PRIMARIO = colors.HexColor("#2f6690")
+COLOR_PRIMARIO_OSCURO = colors.HexColor("#244f70")
+COLOR_BORDE = colors.HexColor("#e2e4e9")
+COLOR_FILA_ALT = colors.HexColor("#f4f5f7")
+COLOR_TEXTO_MUTED = colors.HexColor("#6b7280")
+
+ANCHO_PAGINA_COMPROBANTE = A4[0] - 2 * 1.8 * cm
+# El listado de gastos se imprime en A4 horizontal: el encabezado necesita su
+# propio ancho o el recuadro azul queda mas angosto que la tabla (bug previo).
+ANCHO_PAGINA_LISTADO = landscape(A4)[0] - 2 * 1.8 * cm
+
+
+def formato_monto(valor):
+    # "$" + number_format(-1025000, ...) da "$-1.025.000"; un monto
+    # negativo (ej. utilidad del reporte) se escribe con el signo antes
+    # del simbolo, no despues.
+    negativo = valor < 0
+    formateado = number_format(abs(valor), decimal_pos=0, force_grouping=True)
+    return f"-${formateado}" if negativo else f"${formateado}"
+
+
+def _logo_flowable(alto=1.3 * cm):
+    """Busca el logo del proyecto entre los archivos estaticos (sirve tanto
+    en desarrollo como despues de collectstatic) y lo devuelve como imagen
+    de reportlab respetando su proporcion real."""
+    ruta_logo = finders.find("imagen/logo.webp")
+    if not ruta_logo:
+        return None
+    try:
+        with PILImage.open(ruta_logo) as imagen_pil:
+            ancho_original, alto_original = imagen_pil.size
+    except OSError:
+        return None
+    ancho = alto * (ancho_original / alto_original)
+    imagen = RLImage(ruta_logo, width=ancho, height=alto)
+    imagen.hAlign = "LEFT"
+    return imagen
+
+
+def _encabezado(titulo, generado_en, ancho=ANCHO_PAGINA_COMPROBANTE):
+    """Franja superior compartida por los dos reportes: logo + nombre de la
+    empresa a la izquierda, titulo del reporte al centro y fecha de
+    generacion a la derecha. Usa los mismos colores que el resto del sitio
+    (base.css). `ancho` debe ser el ancho util real de la pagina del
+    documento que la llama (vertical u horizontal), para que el recuadro
+    azul quede del mismo porte que la tabla que va debajo."""
+    estilos = getSampleStyleSheet()
+    estilo_empresa = ParagraphStyle(
+        "Empresa",
+        parent=estilos["Normal"],
+        fontSize=9,
+        fontName="Helvetica-Bold",
+        textColor=colors.white,
+    )
+    estilo_titulo = ParagraphStyle(
+        "TituloReporte",
+        parent=estilos["Normal"],
+        fontSize=15,
+        fontName="Helvetica-Bold",
+        textColor=colors.white,
+        alignment=1,
+    )
+    estilo_fecha = ParagraphStyle(
+        "FechaReporte",
+        parent=estilos["Normal"],
+        fontSize=8.5,
+        textColor=colors.white,
+        alignment=2,
+    )
+
+    logo = _logo_flowable()
+    columna_izquierda = [logo, Spacer(1, 4)] if logo else []
+    columna_izquierda.append(Paragraph(NOMBRE_EMPRESA, estilo_empresa))
+
+    columna_centro = [Paragraph(titulo, estilo_titulo)]
+    columna_derecha = [Paragraph(f"Fecha: {generado_en}", estilo_fecha)]
+
+    ancho_izquierda = ancho * 0.38
+    ancho_derecha = ancho * 0.3
+    ancho_centro = ancho - ancho_izquierda - ancho_derecha
+
+    tabla = Table(
+        [[columna_izquierda, columna_centro, columna_derecha]],
+        colWidths=[ancho_izquierda, ancho_centro, ancho_derecha],
+    )
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), COLOR_PRIMARIO_OSCURO),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (0, 0), 16),
+                ("RIGHTPADDING", (-1, 0), (-1, 0), 16),
+                ("TOPPADDING", (0, 0), (-1, -1), 14),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+            ]
+        )
+    )
+    return tabla
+
+
+def gastos_pdf_bytes(gastos, total):
+    """PDF listado de gastos (con su fila de total); la vista lo llama."""
+    encabezados = [
+        "Fecha", "Concepto", "Forma de pago", "Monto",
+        "Tipo Doc.", "N.° Documento", "Observaciones", "Usuario",
+    ]
+    filas = [encabezados]
+    for gasto in gastos:
+        filas.append(
+            [
+                gasto.fecha.strftime("%d-%m-%Y"),
+                str(gasto.concepto),
+                str(gasto.forma_pago),
+                formato_monto(gasto.monto),
+                str(gasto.tipo_documento) if gasto.tipo_documento else "—",
+                gasto.numero_documento or "—",
+                gasto.observaciones or "",
+                str(gasto.usuario),
+            ]
+        )
+    filas.append(["", "", "", formato_monto(total), "", "", "Total", ""])
+
+    # Anchos proporcionales de columna: sin esto la tabla se autoajusta al
+    # contenido y queda mas angosta que el encabezado (que si ocupa todo
+    # ANCHO_PAGINA_LISTADO), rompiendo la alineacion visual entre ambos.
+    proporciones = [0.08, 0.16, 0.11, 0.09, 0.09, 0.11, 0.24, 0.12]
+    anchos_columnas = [ANCHO_PAGINA_LISTADO * p for p in proporciones]
+
+    tabla = Table(filas, colWidths=anchos_columnas, repeatRows=1)
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        title="Gastos",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+    )
+    doc.build(
+        [
+            _encabezado("Listado de gastos", generado_en, ANCHO_PAGINA_LISTADO),
+            Spacer(1, 16),
+            tabla,
+        ]
+    )
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _rango_legible(desde, hasta):
+    return f"Del {desde} al {hasta}"
+
+
+def _fila_total_general(total_general, ancho=ANCHO_PAGINA_LISTADO):
+    """Fila final del listado de ventas en PDF, con el total de todas las
+    ventas del rango (misma suma que ya trae el listado en pantalla)."""
+    proporciones = [0.62, 0.19, 0.19]
+    anchos = [ancho * p for p in proporciones]
+    tabla = Table(
+        [["", "Total general", formato_monto(total_general)]],
+        colWidths=anchos,
+    )
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (1, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("BACKGROUND", (0, 0), (-1, -1), COLOR_FILA_ALT),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    return tabla
+
+
+def ventas_pdf_bytes(datos, desde, hasta):
+    """PDF con el detalle completo de cada venta del rango (igual que su
+    comprobante individual, una detras de otra) y el total general al
+    final. Reusa las mismas tablas que arma venta_comprobante_pdf_bytes
+    para que ambos PDF se vean iguales para una misma venta."""
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    estilos = getSampleStyleSheet()
+    subtitulo = Paragraph(
+        _rango_legible(desde, hasta),
+        ParagraphStyle("Rango", parent=estilos["Normal"], textColor=COLOR_TEXTO_MUTED),
+    )
+
+    contenido = [
+        _encabezado("Reporte de ventas", generado_en, ANCHO_PAGINA_LISTADO),
+        Spacer(1, 10),
+        subtitulo,
+        Spacer(1, 14),
+    ]
+    for venta in datos["ventas"]:
+        contenido += [
+            Paragraph(
+                f"Venta #{venta.pk}",
+                ParagraphStyle("TituloVentaListado", parent=estilos["Heading3"], textColor=COLOR_PRIMARIO_OSCURO),
+            ),
+            Spacer(1, 4),
+            _tabla_datos_venta(venta, ANCHO_PAGINA_LISTADO),
+            Spacer(1, 6),
+            *_flowables_observaciones_venta(venta, estilos),
+            _tabla_detalle_venta(venta, ANCHO_PAGINA_LISTADO),
+            Spacer(1, 18),
+        ]
+    contenido.append(_fila_total_general(datos["total_general"]))
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        title="Ventas",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+    )
+    doc.build(contenido)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def utilidad_pdf_bytes(datos, desde, hasta):
+    """PDF con la utilidad (ventas - gastos) por periodo del rango."""
+    encabezados = ["Período", "Ventas", "Gastos", "Utilidad"]
+    filas = [encabezados]
+    for fila in datos["filas"]:
+        filas.append(
+            [
+                fila["etiqueta"],
+                formato_monto(fila["ventas"]),
+                formato_monto(fila["gastos"]),
+                formato_monto(fila["utilidad"]),
+            ]
+        )
+    filas.append(
+        [
+            "Total",
+            formato_monto(datos["total_ventas"]),
+            formato_monto(datos["total_gastos"]),
+            formato_monto(datos["total_utilidad"]),
+        ]
+    )
+
+    ancho_columna = ANCHO_PAGINA_COMPROBANTE / len(encabezados)
+    tabla = Table(filas, colWidths=[ancho_columna] * len(encabezados), repeatRows=1)
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    estilos = getSampleStyleSheet()
+    subtitulo = Paragraph(
+        _rango_legible(desde, hasta),
+        ParagraphStyle("Rango", parent=estilos["Normal"], textColor=COLOR_TEXTO_MUTED),
+    )
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title="Utilidad",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+    )
+    doc.build(
+        [
+            _encabezado("Utilidad por período", generado_en),
+            Spacer(1, 10),
+            subtitulo,
+            Spacer(1, 10),
+            tabla,
+        ]
+    )
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def caja_pdf_bytes(datos, desde, hasta):
+    """PDF con el flujo de caja: saldo inicial/antes del periodo/actual, mas
+    la utilidad mes a mes con saldo acumulado."""
+    saldo_inicial = datos["saldo_inicial"]
+    estilos = getSampleStyleSheet()
+    estilo_etiqueta = ParagraphStyle(
+        "SaldoEtiqueta", parent=estilos["Normal"], fontSize=9, textColor=COLOR_TEXTO_MUTED
+    )
+    estilo_valor = ParagraphStyle(
+        "SaldoValor",
+        parent=estilos["Normal"],
+        fontSize=12,
+        fontName="Helvetica-Bold",
+        textColor=COLOR_PRIMARIO_OSCURO,
+    )
+
+    monto_inicial = saldo_inicial.monto if saldo_inicial else Decimal("0")
+    meta_inicial = (
+        f"Desde el {saldo_inicial.fecha.strftime('%d-%m-%Y')}" if saldo_inicial else "No configurado"
+    )
+    resumen_saldo = Table(
+        [
+            [
+                Paragraph("Saldo inicial", estilo_etiqueta),
+                Paragraph("Saldo antes del período", estilo_etiqueta),
+                Paragraph("Saldo actual en caja", estilo_etiqueta),
+            ],
+            [
+                Paragraph(f"{formato_monto(monto_inicial)}<br/><font size=8>{meta_inicial}</font>", estilo_valor),
+                Paragraph(formato_monto(datos["saldo_antes_del_periodo"]), estilo_valor),
+                Paragraph(formato_monto(datos["saldo_actual"]), estilo_valor),
+            ],
+        ],
+        colWidths=[ANCHO_PAGINA_COMPROBANTE / 3] * 3,
+    )
+    resumen_saldo.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("BACKGROUND", (0, 0), (-1, -1), COLOR_FILA_ALT),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+
+    encabezados = ["Período", "Ventas", "Gastos", "Utilidad", "Saldo acumulado"]
+    filas = [encabezados]
+    for fila in datos["filas"]:
+        filas.append(
+            [
+                fila["etiqueta"],
+                formato_monto(fila["ventas"]),
+                formato_monto(fila["gastos"]),
+                formato_monto(fila["utilidad"]),
+                formato_monto(fila["saldo_acumulado"]),
+            ]
+        )
+    filas.append(
+        [
+            "Total",
+            formato_monto(datos["total_ventas"]),
+            formato_monto(datos["total_gastos"]),
+            formato_monto(datos["total_utilidad"]),
+            formato_monto(datos["saldo_actual"]),
+        ]
+    )
+
+    ancho_columna = ANCHO_PAGINA_COMPROBANTE / len(encabezados)
+    tabla = Table(filas, colWidths=[ancho_columna] * len(encabezados), repeatRows=1)
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    subtitulo = Paragraph(
+        _rango_legible(desde, hasta),
+        ParagraphStyle("Rango", parent=estilos["Normal"], textColor=COLOR_TEXTO_MUTED),
+    )
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title="Flujo de caja",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+    )
+    doc.build(
+        [
+            _encabezado("Flujo de caja", generado_en),
+            Spacer(1, 10),
+            subtitulo,
+            Spacer(1, 14),
+            resumen_saldo,
+            Spacer(1, 14),
+            tabla,
+        ]
+    )
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _tabla_rotacion(titulo, productos):
+    encabezados = ["Producto", "Categoría", "Cantidad vendida"]
+    filas = [encabezados]
+    for producto in productos:
+        filas.append(
+            [
+                producto.descripcion_completa,
+                str(producto.categoria),
+                str(producto.cantidad_vendida),
+            ]
+        )
+    ancho_columna = ANCHO_PAGINA_COMPROBANTE / len(encabezados)
+    tabla = Table(filas, colWidths=[ancho_columna] * len(encabezados), repeatRows=1)
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    estilos = getSampleStyleSheet()
+    return [
+        Paragraph(
+            titulo,
+            ParagraphStyle("Subtitulo", parent=estilos["Heading3"], textColor=COLOR_PRIMARIO_OSCURO),
+        ),
+        Spacer(1, 6),
+        tabla,
+        Spacer(1, 16),
+    ]
+
+
+def rotacion_pdf_bytes(datos, desde, hasta):
+    """PDF con los productos mas y menos vendidos del rango."""
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    estilos = getSampleStyleSheet()
+    subtitulo = Paragraph(
+        _rango_legible(desde, hasta),
+        ParagraphStyle("Rango", parent=estilos["Normal"], textColor=COLOR_TEXTO_MUTED),
+    )
+
+    contenido = [
+        _encabezado("Rotación de productos", generado_en),
+        Spacer(1, 10),
+        subtitulo,
+        Spacer(1, 16),
+        *_tabla_rotacion("Más vendidos", datos["mas_vendidos"]),
+        *_tabla_rotacion("Menos vendidos", datos["menos_vendidos"]),
+    ]
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title="Rotación de productos",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+    )
+    doc.build(contenido)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def vehiculos_pdf_bytes(datos, desde, hasta):
+    """PDF con el total generado por cada vehiculo (todas las piezas que
+    tienen un vehiculo de origen asociado, vendidas en el rango)."""
+    encabezados = ["Vehículo", "Unidades vendidas", "Total generado"]
+    filas = [encabezados]
+    for vehiculo in datos["vehiculos"]:
+        filas.append([vehiculo["descripcion"], str(vehiculo["unidades"]), formato_monto(vehiculo["total"])])
+    filas.append(["Total", "", formato_monto(datos["total_general"])])
+
+    proporciones = [0.5, 0.25, 0.25]
+    anchos_columnas = [ANCHO_PAGINA_COMPROBANTE * p for p in proporciones]
+    tabla = Table(filas, colWidths=anchos_columnas, repeatRows=1)
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    estilos = getSampleStyleSheet()
+    subtitulo = Paragraph(
+        _rango_legible(desde, hasta),
+        ParagraphStyle("Rango", parent=estilos["Normal"], textColor=COLOR_TEXTO_MUTED),
+    )
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title="Ingresos por vehículo",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+    )
+    doc.build(
+        [
+            _encabezado("Ingresos por vehículo", generado_en),
+            Spacer(1, 10),
+            subtitulo,
+            Spacer(1, 10),
+            tabla,
+        ]
+    )
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def gasto_comprobante_pdf_bytes(gasto):
+    """PDF de una pagina para UN gasto: sus datos principales y, si tiene,
+    la foto del comprobante adjunta. Lo pide el boton "Guardar PDF" de la
+    vista de comprobante individual."""
+    estilos = getSampleStyleSheet()
+    estilo_etiqueta = ParagraphStyle(
+        "Etiqueta",
+        parent=estilos["Normal"],
+        fontSize=7.5,
+        fontName="Helvetica-Bold",
+        textColor=colors.white,
+    )
+    estilo_valor = ParagraphStyle(
+        "Valor",
+        parent=estilos["Normal"],
+        fontSize=10.5,
+        fontName="Helvetica-Bold",
+    )
+    estilo_pie = ParagraphStyle(
+        "Pie",
+        parent=estilos["Normal"],
+        fontSize=8,
+        textColor=COLOR_TEXTO_MUTED,
+    )
+
+    etiquetas = ["FECHA", "CONCEPTO", "MONTO", "TIPO DOC.", "N.° DOCUMENTO"]
+    valores = [
+        gasto.fecha.strftime("%d-%m-%Y"),
+        str(gasto.concepto),
+        formato_monto(gasto.monto),
+        str(gasto.tipo_documento) if gasto.tipo_documento else "—",
+        gasto.numero_documento or "—",
+    ]
+    ancho_columna = ANCHO_PAGINA_COMPROBANTE / len(etiquetas)
+
+    tabla_datos = Table(
+        [
+            [Paragraph(etq, estilo_etiqueta) for etq in etiquetas],
+            [Paragraph(val, estilo_valor) for val in valores],
+        ],
+        colWidths=[ancho_columna] * len(etiquetas),
+    )
+    tabla_datos.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("BACKGROUND", (0, 1), (-1, 1), colors.white),
+                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+
+    contenido = [
+        Paragraph(
+            f"Comprobante de gasto #{gasto.pk}",
+            ParagraphStyle("Titulo", parent=estilos["Heading2"], textColor=COLOR_PRIMARIO_OSCURO),
+        ),
+        Spacer(1, 8),
+        tabla_datos,
+        Spacer(1, 16),
+    ]
+
+    if gasto.observaciones:
+        contenido.append(Paragraph(f"<b>Observaciones:</b> {gasto.observaciones}", estilos["Normal"]))
+        contenido.append(Spacer(1, 16))
+
+    if gasto.imagen:
+        try:
+            with PILImage.open(gasto.imagen.path) as imagen_pil:
+                ancho_original, alto_original = imagen_pil.size
+            alto_imagen = ANCHO_PAGINA_COMPROBANTE * (alto_original / ancho_original)
+            alto_maximo = 18 * cm
+            if alto_imagen > alto_maximo:
+                alto_imagen = alto_maximo
+            contenido.append(
+                RLImage(
+                    gasto.imagen.path,
+                    width=ANCHO_PAGINA_COMPROBANTE,
+                    height=alto_imagen,
+                    kind="proportional",
+                )
+            )
+        except (OSError, ValueError):
+            contenido.append(Paragraph("No fue posible cargar la imagen adjunta.", estilo_pie))
+    else:
+        contenido.append(Paragraph("Este gasto no tiene una imagen adjunta.", estilo_pie))
+
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title=f"Comprobante de gasto #{gasto.pk}",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+        bottomMargin=1.8 * cm,
+    )
+    doc.build(
+        [
+            _encabezado("Documento adjunto de gasto", generado_en),
+            Spacer(1, 16),
+            *contenido,
+        ]
+    )
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _tabla_datos_venta(venta, ancho=ANCHO_PAGINA_COMPROBANTE):
+    """Mini tabla de 4 columnas con los datos generales de una venta (fecha,
+    tipo de documento, forma de pago, usuario). La reusan el comprobante
+    individual y el listado completo de ventas en PDF."""
+    estilos = getSampleStyleSheet()
+    estilo_etiqueta = ParagraphStyle(
+        "EtiquetaVenta",
+        parent=estilos["Normal"],
+        fontSize=7.5,
+        fontName="Helvetica-Bold",
+        textColor=colors.white,
+    )
+    estilo_valor = ParagraphStyle(
+        "ValorVenta",
+        parent=estilos["Normal"],
+        fontSize=10.5,
+        fontName="Helvetica-Bold",
+    )
+
+    etiquetas = ["FECHA", "TIPO DOC.", "FORMA DE PAGO", "USUARIO"]
+    valores = [
+        venta.fecha_venta.strftime("%d-%m-%Y"),
+        str(venta.tipo_documento),
+        str(venta.forma_pago),
+        str(venta.usuario),
+    ]
+    ancho_columna = ancho / len(etiquetas)
+
+    tabla = Table(
+        [
+            [Paragraph(etq, estilo_etiqueta) for etq in etiquetas],
+            [Paragraph(val, estilo_valor) for val in valores],
+        ],
+        colWidths=[ancho_columna] * len(etiquetas),
+    )
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("BACKGROUND", (0, 1), (-1, 1), colors.white),
+                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    return tabla
+
+
+def _tabla_detalle_venta(venta, ancho=ANCHO_PAGINA_COMPROBANTE):
+    """Tabla de detalle de productos de una venta (Producto/Cantidad/Precio/
+    Subtotal) con el pie de Neto/IVA/Total si la venta lleva IVA, o solo
+    Total si es en efectivo. La reusan el comprobante individual y el
+    listado completo de ventas en PDF."""
+    encabezados = ["Producto", "Cantidad", "Precio", "Subtotal"]
+    filas = [encabezados]
+    total = Decimal("0")
+    for detalle in venta.detalles.select_related("producto__vehiculo__modelo__marca").all():
+        subtotal = detalle.subtotal
+        total += subtotal
+        filas.append(
+            [
+                str(detalle.producto),
+                str(detalle.cantidad),
+                formato_monto(detalle.precio),
+                formato_monto(subtotal),
+            ]
+        )
+    if venta.monto_total is not None:
+        filas.append(["", "", "Neto", formato_monto(venta.monto_neto)])
+        filas.append(["", "", "IVA (19%)", formato_monto(venta.monto_iva)])
+        filas.append(["", "", "Total", formato_monto(venta.monto_total)])
+    else:
+        filas.append(["", "", "Total", formato_monto(total)])
+
+    proporciones = [0.46, 0.16, 0.19, 0.19]
+    anchos = [ancho * p for p in proporciones]
+    tabla = Table(filas, colWidths=anchos, repeatRows=1)
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, COLOR_FILA_ALT]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return tabla
+
+
+def _flowables_observaciones_venta(venta, estilos):
+    """Parrafo "Observaciones: ..." de una venta, si tiene, mas su espaciador.
+    Mismo criterio que gasto_comprobante_pdf_bytes: se omite por completo si
+    la venta no tiene observaciones cargadas."""
+    if not venta.observaciones:
+        return []
+    return [
+        Paragraph(f"<b>Observaciones:</b> {venta.observaciones}", estilos["Normal"]),
+        Spacer(1, 16),
+    ]
+
+
+def venta_comprobante_pdf_bytes(venta):
+    """PDF de una pagina para UNA venta: sus datos generales y el detalle de
+    productos vendidos, con el total. Lo pide el boton "Guardar PDF" de la
+    vista de comprobante individual de Ventas."""
+    estilos = getSampleStyleSheet()
+    tabla_datos = _tabla_datos_venta(venta)
+    tabla_detalle = _tabla_detalle_venta(venta)
+
+    generado_en = timezone.localtime().strftime("%d-%m-%Y %H:%M")
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title=f"Comprobante de venta #{venta.pk}",
+        topMargin=0,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+        bottomMargin=1.8 * cm,
+    )
+    doc.build(
+        [
+            _encabezado("Documento de venta", generado_en),
+            Spacer(1, 16),
+            Paragraph(
+                f"Comprobante de venta #{venta.pk}",
+                ParagraphStyle("TituloVenta", parent=estilos["Heading2"], textColor=COLOR_PRIMARIO_OSCURO),
+            ),
+            Spacer(1, 8),
+            tabla_datos,
+            Spacer(1, 16),
+            *_flowables_observaciones_venta(venta, estilos),
+            tabla_detalle,
+        ]
+    )
+    buffer.seek(0)
+    return buffer.getvalue()

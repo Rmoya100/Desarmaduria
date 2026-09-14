@@ -34,12 +34,11 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if os.environ.get(
-    "DJANGO_ALLOWED_HOSTS"
-) else []
+ALLOWED_HOSTS = [
+    host.strip() for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if host.strip()
+]
 
 
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -53,6 +52,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Debe ir justo despues de SecurityMiddleware y antes que todo lo demas:
+    # sirve los archivos de STATIC_ROOT sin pasar por el resto del stack.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -146,9 +148,19 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'es-cl'
 
+# El locale "es" base de Django separa miles con un espacio fino (\xa0), no
+# con punto. desarmaduria/formats/es_CL/formats.py lo pisa con el separador
+# que se usa realmente en Chile.
+FORMAT_MODULE_PATH = ['desarmaduria.formats']
+
 TIME_ZONE = 'America/Santiago'
 
 USE_I18N = True
+
+# Sin esto, los numeros en los templates ({{ gasto.monto }}) muestran la coma
+# decimal del locale es-cl pero NO separador de miles (ej. "5000,00" en vez de
+# "5.000,00"). Django lo trae apagado por default.
+USE_THOUSAND_SEPARATOR = True
 
 USE_TZ = True
 
@@ -158,6 +170,40 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Carpeta destino de `collectstatic`. No se versiona (ver .gitignore): se
+# regenera en cada despliegue. Es la que WhiteNoise sirve en produccion.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Los estaticos se versionan siempre, para que el navegador jamas sirva una
+# version vieja desde su cache:
+#   - Produccion: hash del contenido en el nombre (base.4f2a1c9d.css), lo que
+#     ademas permite cachear cada archivo un anio.
+#   - Desarrollo: `?v=<mtime>` en la URL. No se puede usar el hash porque su
+#     manifiesto solo existe despues de `collectstatic`, y {% static %}
+#     fallaria sin el.
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': (
+            'desarmaduria.almacenamiento.StaticFilesVersionados'
+            if DEBUG
+            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        ),
+    },
+}
+
+# Archivos subidos por usuarios (ej. foto del comprobante de un gasto).
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# La pantalla de Ingresos manda un formset con una fila por producto activo
+# (~7 campos c/u). El JS deshabilita las filas vacias antes de enviar, asi
+# que un ingreso normal manda pocos campos; esto es el margen para cuando se
+# cargan muchos productos de una vez o el navegador no ejecuta el JS.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field

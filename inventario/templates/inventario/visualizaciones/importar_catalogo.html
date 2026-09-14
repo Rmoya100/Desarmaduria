@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
+{% block title %}Importar catálogo · Inventario{% endblock %}
+
+{% block content %}
+<div class="page-header page-header--actions">
+    <h1>Importar catálogo desde Excel</h1>
+    <div class="page-header__actions">
+        <a href="{% url 'productos_lista' %}" class="btn">Volver a Productos</a>
+    </div>
+</div>
+
+{% if not previsualizacion %}
+<div class="form-card inventory-form-card">
+    <p class="help-text">
+        Cada <strong>encabezado de columna</strong> se toma como categoría y las
+        filas de abajo como las piezas. Las columnas sin nombre o llamadas
+        «Columna 1», «Columna 2»… se ignoran. Los nombres se guardan en
+        MAYÚSCULAS y las piezas que ya existan no se duplican.
+    </p>
+
+    <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<span class="help-text">{{ field.help_text }}</span>{% endif %}
+            {% if field.errors %}
+            <ul class="errorlist">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Previsualizar</button>
+            <a href="{% url 'productos_lista' %}" class="btn">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% else %}
+<div class="alert alert-info" role="status">
+    Revisa el resumen antes de confirmar. Todavía no se ha guardado nada.
+</div>
+
+<section class="table-panel">
+    <div class="table-panel__header">
+        <div>
+            <h2>Vista previa de «{{ previsualizacion.archivo }}»</h2>
+            <p class="table-count">
+                {{ previsualizacion.lectura.categorias|length }} categoría(s) ·
+                {{ previsualizacion.lectura.total_piezas }} pieza(s) en la planilla
+            </p>
+        </div>
+    </div>
+    <div class="table-scroll">
+        <table class="data-table">
+            <caption class="visually-hidden">Piezas por categoría detectadas en la planilla</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Categoría</th>
+                    <th scope="col">Piezas nuevas</th>
+                    <th scope="col">Ya existían</th>
+                    <th scope="col">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fila in previsualizacion.resumen.detalle %}
+                <tr>
+                    <td>{{ fila.categoria }}</td>
+                    <td><span class="stock-badge{% if not fila.nuevas %} stock-badge--empty{% endif %}">{{ fila.nuevas }}</span></td>
+                    <td>{{ fila.existentes }}</td>
+                    <td>{{ fila.total }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td><strong>Total</strong></td>
+                    <td><strong>{{ previsualizacion.resumen.piezas_creadas }}</strong></td>
+                    <td><strong>{{ previsualizacion.resumen.piezas_existentes }}</strong></td>
+                    <td><strong>{{ previsualizacion.lectura.total_piezas }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</section>
+
+{% if previsualizacion.resumen.categorias_creadas %}
+<div class="alert alert-info" role="status">
+    Se crearán {{ previsualizacion.resumen.categorias_creadas }} categoría(s) nueva(s).
+</div>
+{% endif %}
+
+{% for aviso in previsualizacion.lectura.avisos %}
+<div class="alert alert-warning" role="status">{{ aviso }}</div>
+{% endfor %}
+
+<div class="form-card">
+    {% if previsualizacion.resumen.piezas_creadas %}
+    <p>
+        Se crearán <strong>{{ previsualizacion.resumen.piezas_creadas }}</strong> piezas
+        nuevas en el catálogo, sin vehículo ni stock. Las
+        {{ previsualizacion.resumen.piezas_existentes }} que ya existen no se modifican.
+    </p>
+    <form method="post" class="form-actions">
+        {% csrf_token %}
+        <input type="hidden" name="confirmar" value="1">
+        <button type="submit" class="btn btn-primary">Confirmar importación</button>
+        <a href="{% url 'productos_importar' %}" class="btn">Elegir otra planilla</a>
+    </form>
+    {% else %}
+    <p>
+        Todas las piezas de esta planilla ya están en el catálogo: no hay nada
+        que importar.
+    </p>
+    <div class="form-actions">
+        <a href="{% url 'productos_importar' %}" class="btn btn-primary">Elegir otra planilla</a>
+        <a href="{% url 'productos_lista' %}" class="btn">Volver a Productos</a>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

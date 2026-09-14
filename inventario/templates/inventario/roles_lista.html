@@ -13,7 +13,7 @@
 {% include "inventario/_config_tabs.html" with seccion_activa="roles" %}
 
 {% if roles %}
-<table>
+<table class="tabla-cards">
     <thead>
         <tr>
             <th>Rol</th>
@@ -24,8 +24,8 @@
     <tbody>
         {% for rol in roles %}
         <tr>
-            <td>{{ rol.nombre_rol }}</td>
-            <td>{{ rol.rol_permisos.count }} permiso{{ rol.rol_permisos.count|pluralize }}</td>
+            <td data-label="Rol">{{ rol.nombre_rol }}</td>
+            <td data-label="Permisos">{{ rol.rol_permisos.count }} permiso{{ rol.rol_permisos.count|pluralize }}</td>
             {% if puede_editar %}
             <td class="table-actions">
                 <a href="{% url 'rol_editar' rol.pk %}" class="btn btn-sm">Editar</a>

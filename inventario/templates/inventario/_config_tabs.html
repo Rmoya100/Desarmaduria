@@ -12,4 +12,7 @@
     {% if request.user|tiene_permiso:"documentos:ver" %}
     <a href="{% url 'documentos' %}" class="tab{% if seccion_activa == 'documentos' %} active{% endif %}">Tipos de documento</a>
     {% endif %}
+    {% if request.user|tiene_permiso:"categorias:ver" %}
+    <a href="{% url 'categorias' %}" class="tab{% if seccion_activa == 'categorias' %} active{% endif %}">Categorías</a>
+    {% endif %}
 </div>

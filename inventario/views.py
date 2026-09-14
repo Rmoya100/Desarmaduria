@@ -1,6 +1,11 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import (
     Count,
     F,
@@ -12,37 +17,136 @@ from django.db.models import (
     Sum,
     Value,
 )
-from django.db import transaction
 from django.db.models.functions import Coalesce
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
+from django.utils import timezone
+from django.views.generic import CreateView, DeleteView, ListView, UpdateView
+from openpyxl import Workbook
+from openpyxl.styles import Font
 
 from .forms import (
+    CategoriaForm,
+    ConceptoGastoForm,
     DetalleEntradaFormSet,
+    DetalleVentaFormSet,
     EntradaForm,
     FormaPagoForm,
+    GastoForm,
     RolForm,
     TipoDocumentoForm,
     UsuarioForm,
+    VentaForm,
 )
 from .models import (
     Categoria,
+    ConceptoGasto,
     DetalleEntrada,
     DetalleVenta,
     Entrada,
     FormaPago,
+    Gasto,
     Producto,
     Rol,
     TipoDocumento,
     Usuario,
     Vehiculo,
+    Venta,
 )
+from .pdf import gasto_comprobante_pdf_bytes, gastos_pdf_bytes, venta_comprobante_pdf_bytes, ventas_pdf_bytes
 from .permisos import permiso_requerido, tiene_permiso
+from .reportes.queries import (
+    inicio_de_periodo,
+    reporte_gastos_por_concepto,
+    reporte_utilidad,
+    reporte_ventas,
+    restar_meses,
+    ventas_anotadas,
+)
+from .servicios.inventario import productos_con_stock, valor_inventario
+
+# Bajo este umbral (entradas - ventas) un producto se marca "bajo stock" en el
+# dashboard. No existe un campo de stock minimo en el schema original, asi
+# que es un valor fijo, ajustable aqui si el negocio define uno propio.
+UMBRAL_BAJO_STOCK = 5
 
 
 @login_required
 def en_construccion(request, titulo):
     return render(request, "inventario/en_construccion.html", {"titulo": titulo})
+
+
+@login_required
+def dashboard(request):
+    hoy = timezone.localdate()
+    # "Periodo actual" del negocio, no mes calendario: del dia 5 de un mes al
+    # dia 6 del siguiente (ver inicio_de_periodo). Gastos/Ventas/Ingresos no
+    # se ven afectados, solo el Dashboard y los Reportes.
+    inicio_periodo = inicio_de_periodo(hoy)
+
+    ventas_periodo = reporte_ventas(inicio_periodo.isoformat(), hoy.isoformat())
+    gastos_periodo = Gasto.objects.filter(fecha__gte=inicio_periodo, fecha__lte=hoy)
+    total_gastos_periodo = gastos_periodo.aggregate(total=Sum("monto"))["total"] or Decimal("0")
+
+    # Misma fuente de verdad que el modulo Inventario (servicios/inventario.py).
+    productos = list(productos_con_stock())
+    valor_por_categoria = {}
+    for producto in productos:
+        nombre_categoria = producto.categoria.nombre_categoria
+        valor_producto = (producto.costo or Decimal("0")) * producto.stock_disponible
+        valor_por_categoria[nombre_categoria] = (
+            valor_por_categoria.get(nombre_categoria, Decimal("0")) + valor_producto
+        )
+    categorias_por_valor = sorted(
+        valor_por_categoria.items(), key=lambda item: item[1], reverse=True
+    )
+
+    top_productos = list(
+        DetalleVenta.objects.values("producto__nombre")
+        .annotate(cantidad_total=Sum("cantidad"))
+        .order_by("-cantidad_total")[:5]
+    )
+
+    # Evolucion de ventas vs gastos, y gastos por concepto, de los ultimos 6
+    # periodos (mismo calculo que Reportes/Utilidad, para que Dashboard y
+    # Reportes nunca queden desalineados).
+    desde_evolucion = restar_meses(inicio_periodo, 5)
+    evolucion = reporte_utilidad(desde_evolucion.isoformat(), hoy.isoformat())
+    gastos_por_concepto = reporte_gastos_por_concepto(desde_evolucion.isoformat(), hoy.isoformat())
+
+    contexto = {
+        "total_ventas_mes": ventas_periodo["total_general"],
+        "cantidad_ventas_mes": ventas_periodo["cantidad_ventas"],
+        "total_gastos_mes": total_gastos_periodo,
+        "cantidad_gastos_mes": gastos_periodo.count(),
+        "utilidad_mes": ventas_periodo["total_general"] - total_gastos_periodo,
+        "total_efectivo": ventas_periodo["total_efectivo"],
+        "total_transferencia_tarjeta": ventas_periodo["total_transferencia_tarjeta"],
+        "total_iva": ventas_periodo["total_iva"],
+        "productos_activos": len(productos),
+        "valor_inventario": valor_inventario(productos),
+        "total_vehiculos": Vehiculo.objects.count(),
+        "top_productos": top_productos,
+        "gastos_por_concepto": gastos_por_concepto,
+        "gastos_recientes": Gasto.objects.select_related("concepto", "usuario").order_by(
+            "-fecha", "-id_gasto"
+        )[:5],
+        "grafico_evolucion": {
+            "etiquetas": [fila["etiqueta"] for fila in evolucion["filas"]],
+            "ventas": [float(fila["ventas"]) for fila in evolucion["filas"]],
+            "gastos": [float(fila["gastos"]) for fila in evolucion["filas"]],
+        },
+        "grafico_top_productos": {
+            "etiquetas": [fila["producto__nombre"] for fila in top_productos],
+            "cantidades": [fila["cantidad_total"] for fila in top_productos],
+        },
+        "grafico_valor_categoria": {
+            "etiquetas": [nombre for nombre, _ in categorias_por_valor],
+            "valores": [float(valor) for _, valor in categorias_por_valor],
+        },
+    }
+    return render(request, "inventario/dashboard.html", contexto)
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +388,17 @@ CATALOGOS = {
         "url_editar": "documentos_editar",
         "url_eliminar": "documentos_eliminar",
     },
+    "categorias": {
+        "model": Categoria,
+        "form": CategoriaForm,
+        "titulo": "Categorías",
+        "titulo_singular": "categoría",
+        "nuevo": "Nueva categoría",
+        "url_lista": "categorias",
+        "url_crear": "categorias_crear",
+        "url_editar": "categorias_editar",
+        "url_eliminar": "categorias_eliminar",
+    },
 }
 
 
@@ -342,3 +457,455 @@ def catalogo_eliminar(request, clave, pk):
         return redirect(cfg["url_lista"])
     contexto = {"instancia": instancia, "cfg": cfg, "clave": clave}
     return render(request, "inventario/catalogo_eliminar.html", contexto)
+
+
+# ---------------------------------------------------------------------------
+# Gastos
+# ---------------------------------------------------------------------------
+def gastos_filtrados(request):
+    """Gastos ordenados por fecha y filtrados por desde/hasta= si vienen
+    en la URL. La usan la lista y las 2 vistas de exportacion, para que las
+    tres apliquen el mismo filtro sin repetir la logica."""
+    queryset = Gasto.objects.select_related(
+        "concepto", "forma_pago", "usuario", "tipo_documento"
+    ).order_by("-fecha")
+    desde = request.GET.get("desde")
+    hasta = request.GET.get("hasta")
+    if desde:
+        queryset = queryset.filter(fecha__gte=desde)
+    if hasta:
+        queryset = queryset.filter(fecha__lte=hasta)
+    return queryset
+
+
+class GastoListView(LoginRequiredMixin, ListView):
+    model = Gasto
+    context_object_name = "gastos"
+
+    def get_queryset(self):
+        return gastos_filtrados(self.request)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["total"] = self.get_queryset().aggregate(total=Sum("monto"))["total"]
+        context["desde"] = self.request.GET.get("desde", "")
+        context["hasta"] = self.request.GET.get("hasta", "")
+        return context
+
+
+@login_required
+def gastos_exportar_pdf(request):
+    gastos = gastos_filtrados(request)
+    total = gastos.aggregate(total=Sum("monto"))["total"] or 0
+
+    response = HttpResponse(gastos_pdf_bytes(gastos, total), content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="gastos.pdf"'
+    return response
+
+
+@login_required
+def gastos_exportar_excel(request):
+    gastos = gastos_filtrados(request)
+    total = gastos.aggregate(total=Sum("monto"))["total"] or 0
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Gastos"
+
+    encabezados = [
+        "Fecha", "Concepto", "Forma de pago", "Monto",
+        "Tipo Doc.", "N.° Documento", "Observaciones", "Usuario",
+    ]
+    ws.append(encabezados)
+    for celda in ws[1]:
+        celda.font = Font(bold=True)
+
+    for gasto in gastos:
+        ws.append(
+            [
+                gasto.fecha,
+                str(gasto.concepto),
+                str(gasto.forma_pago),
+                gasto.monto,
+                str(gasto.tipo_documento) if gasto.tipo_documento else "",
+                gasto.numero_documento or "",
+                gasto.observaciones or "",
+                str(gasto.usuario),
+            ]
+        )
+
+    fila_total = ws.max_row + 1
+    ws.cell(row=fila_total, column=3, value="Total").font = Font(bold=True)
+    celda_total = ws.cell(row=fila_total, column=4, value=total)
+    celda_total.font = Font(bold=True)
+
+    # Formato numerico de Excel (no texto): separa miles/decimales segun el
+    # locale del Excel que lo abra, y se puede seguir sumando/ordenado.
+    for fila in ws.iter_rows(min_row=2, min_col=4, max_col=4):
+        for celda in fila:
+            celda.number_format = "#,##0"
+
+    anchos = {"A": 12, "B": 20, "C": 16, "D": 14, "E": 12, "F": 16, "G": 30, "H": 16}
+    for columna, ancho in anchos.items():
+        ws.column_dimensions[columna].width = ancho
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="gastos.xlsx"'
+    wb.save(response)
+    return response
+
+
+class GastoFormMixin(LoginRequiredMixin):
+    model = Gasto
+    form_class = GastoForm
+    template_name = "inventario/gasto_form.html"
+    success_url = reverse_lazy("gastos")
+
+
+class GastoCreateView(GastoFormMixin, CreateView):
+    def form_valid(self, form):
+        form.instance.usuario = self.request.user
+        messages.success(self.request, "Gasto registrado correctamente.")
+        return super().form_valid(form)
+
+
+class GastoUpdateView(GastoFormMixin, UpdateView):
+    def form_valid(self, form):
+        messages.success(self.request, "Gasto actualizado correctamente.")
+        return super().form_valid(form)
+
+
+class GastoDeleteView(LoginRequiredMixin, DeleteView):
+    model = Gasto
+    success_url = reverse_lazy("gastos")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Gasto eliminado correctamente.")
+        return super().form_valid(form)
+
+
+@login_required
+def gasto_comprobante(request, pk):
+    gasto = get_object_or_404(
+        Gasto.objects.select_related("concepto", "forma_pago", "usuario", "tipo_documento"), pk=pk
+    )
+    return render(request, "inventario/gasto_comprobante.html", {"gasto": gasto})
+
+
+@login_required
+def gasto_comprobante_pdf(request, pk):
+    gasto = get_object_or_404(
+        Gasto.objects.select_related("concepto", "forma_pago", "usuario", "tipo_documento"), pk=pk
+    )
+    response = HttpResponse(
+        gasto_comprobante_pdf_bytes(gasto), content_type="application/pdf"
+    )
+    response["Content-Disposition"] = f'attachment; filename="comprobante_gasto_{gasto.pk}.pdf"'
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Conceptos de gasto
+# ---------------------------------------------------------------------------
+class ConceptoGastoListView(LoginRequiredMixin, ListView):
+    model = ConceptoGasto
+    ordering = "nombre_gasto"
+    context_object_name = "conceptos"
+    template_name = "inventario/concepto_list.html"
+
+
+class ConceptoGastoFormMixin(LoginRequiredMixin):
+    model = ConceptoGasto
+    form_class = ConceptoGastoForm
+    template_name = "inventario/concepto_form.html"
+    success_url = reverse_lazy("conceptos")
+
+
+class ConceptoGastoCreateView(ConceptoGastoFormMixin, CreateView):
+    def form_valid(self, form):
+        messages.success(self.request, "Concepto registrado correctamente.")
+        return super().form_valid(form)
+
+
+class ConceptoGastoUpdateView(ConceptoGastoFormMixin, UpdateView):
+    def form_valid(self, form):
+        messages.success(self.request, "Concepto actualizado correctamente.")
+        return super().form_valid(form)
+
+
+class ConceptoGastoDeleteView(LoginRequiredMixin, DeleteView):
+    model = ConceptoGasto
+    template_name = "inventario/concepto_confirm_delete.html"
+    success_url = reverse_lazy("conceptos")
+
+    def form_valid(self, form):
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                "No se puede eliminar: hay gastos registrados con ese concepto.",
+            )
+            return self.get(self.request, *self.args, **self.kwargs)
+        messages.success(self.request, "Concepto eliminado correctamente.")
+        return response
+
+
+# ---------------------------------------------------------------------------
+# Ventas
+# ---------------------------------------------------------------------------
+def ventas_filtradas(request):
+    """Ventas ordenadas por fecha y filtradas por desde/hasta= si vienen en
+    la URL, igual que gastos_filtrados. Sin filtro por defecto: a diferencia
+    del reporte de Reportes/Ventas (que siempre acota a un rango), aca se
+    quiere ver el listado completo salvo que el usuario filtre."""
+    queryset = ventas_anotadas()
+    desde = request.GET.get("desde")
+    hasta = request.GET.get("hasta")
+    if desde:
+        queryset = queryset.filter(fecha_venta__gte=desde)
+    if hasta:
+        queryset = queryset.filter(fecha_venta__lte=hasta)
+    return queryset
+
+
+VENTAS_POR_PAGINA = 15
+
+
+@permiso_requerido("ventas", "ver")
+def ventas_lista(request):
+    ventas = ventas_filtradas(request).prefetch_related(
+        "detalles__producto__vehiculo__modelo__marca"
+    )
+    total = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
+    paginador = Paginator(ventas, VENTAS_POR_PAGINA)
+    pagina = paginador.get_page(request.GET.get("page"))
+    contexto = {
+        "ventas": pagina,
+        "page_obj": pagina,
+        "total": total,
+        "desde": request.GET.get("desde", ""),
+        "hasta": request.GET.get("hasta", ""),
+        "puede_crear": tiene_permiso(request.user, "ventas", "crear"),
+        "puede_editar": tiene_permiso(request.user, "ventas", "editar"),
+        "puede_eliminar": tiene_permiso(request.user, "ventas", "eliminar"),
+    }
+    return render(request, "inventario/venta_list.html", contexto)
+
+
+def _venta_form_y_formset(request, venta):
+    if request.method == "POST":
+        form = VentaForm(request.POST, instance=venta)
+        formset = DetalleVentaFormSet(request.POST, instance=venta)
+    else:
+        form = VentaForm(instance=venta)
+        formset = DetalleVentaFormSet(instance=venta)
+    return form, formset
+
+
+def _productos_json():
+    """Catalogo para el modal "Buscar Producto" del formulario de ventas
+    (inventario.js lo lee via json_script), con el stock disponible y el
+    vehiculo de cada uno para mostrarlo en la tabla y distinguir productos
+    con el mismo nombre que pertenecen a vehiculos distintos. Reusa
+    productos_con_stock() (el mismo calculo que usa el dashboard, que ya
+    trae select_related de vehiculo) en vez de duplicar la logica de stock.
+    Se recalcula en cada request: son pocas filas y asi nunca queda
+    desactualizado tras crear/eliminar un producto o registrar una venta."""
+    return [
+        {
+            "id_producto": p.id_producto,
+            "nombre": p.nombre,
+            "vehiculo": str(p.vehiculo) if p.vehiculo_id else "",
+            "stock_disponible": p.stock_disponible,
+            "precio_venta": p.precio_venta,
+        }
+        for p in productos_con_stock()
+    ]
+
+
+def _formas_pago_iva_json():
+    """Le dice a inventario.js, por id de FormaPago, cuales llevan el 19% de
+    IVA (FormaPago.aplica_iva), para mostrar y calcular en vivo el resumen
+    de IVA junto al detalle de productos, sin duplicar la regla de texto en
+    JS."""
+    return {fp.pk: fp.aplica_iva() for fp in FormaPago.objects.all()}
+
+
+@permiso_requerido("ventas", "crear")
+def venta_crear(request):
+    form, formset = _venta_form_y_formset(request, Venta())
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        with transaction.atomic():
+            venta = form.save(commit=False)
+            venta.usuario = request.user
+            venta.save()
+            formset.instance = venta
+            formset.save()
+            venta.actualizar_montos()
+        return redirect("venta_guardada")
+    contexto = {
+        "form": form,
+        "formset": formset,
+        "titulo": "Nueva venta",
+        "productos_json": _productos_json(),
+        "formas_pago_iva_json": _formas_pago_iva_json(),
+        "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+    }
+    return render(request, "inventario/venta_form.html", contexto)
+
+
+@permiso_requerido("ventas", "crear")
+def venta_guardada(request):
+    return render(request, "inventario/venta_guardada.html")
+
+
+@permiso_requerido("ventas", "editar")
+def venta_editar(request, pk):
+    venta = get_object_or_404(Venta, pk=pk)
+    form, formset = _venta_form_y_formset(request, venta)
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        with transaction.atomic():
+            form.save()
+            formset.save()
+            venta.actualizar_montos()
+        messages.success(request, "Venta actualizada correctamente.")
+        return redirect("ventas")
+    contexto = {
+        "form": form,
+        "formset": formset,
+        "titulo": "Editar venta",
+        "productos_json": _productos_json(),
+        "formas_pago_iva_json": _formas_pago_iva_json(),
+        "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+    }
+    return render(request, "inventario/venta_form.html", contexto)
+
+
+@permiso_requerido("ventas", "eliminar")
+def venta_eliminar(request, pk):
+    venta = get_object_or_404(Venta, pk=pk)
+    if request.method == "POST":
+        venta.delete()
+        messages.success(request, "Venta eliminada correctamente.")
+        return redirect("ventas")
+    return render(request, "inventario/venta_confirm_delete.html", {"venta": venta})
+
+
+@permiso_requerido("ventas", "ver")
+def venta_comprobante(request, pk):
+    venta = get_object_or_404(
+        Venta.objects.select_related("tipo_documento", "forma_pago", "usuario"), pk=pk
+    )
+    filas = [
+        {"detalle": detalle, "subtotal": detalle.subtotal}
+        for detalle in venta.detalles.select_related("producto__vehiculo__modelo__marca")
+    ]
+    if venta.monto_total is not None:
+        neto, iva, total = venta.monto_neto, venta.monto_iva, venta.monto_total
+    else:
+        neto = iva = None
+        total = sum((fila["subtotal"] for fila in filas), Decimal("0"))
+    return render(
+        request,
+        "inventario/venta_comprobante.html",
+        {"venta": venta, "filas": filas, "neto": neto, "iva": iva, "total": total},
+    )
+
+
+@permiso_requerido("ventas", "ver")
+def venta_comprobante_pdf(request, pk):
+    venta = get_object_or_404(
+        Venta.objects.select_related("tipo_documento", "forma_pago", "usuario"), pk=pk
+    )
+    response = HttpResponse(
+        venta_comprobante_pdf_bytes(venta), content_type="application/pdf"
+    )
+    response["Content-Disposition"] = f'attachment; filename="comprobante_venta_{venta.pk}.pdf"'
+    return response
+
+
+@permiso_requerido("ventas", "ver")
+def ventas_exportar_pdf(request):
+    ventas = ventas_filtradas(request).prefetch_related(
+        "detalles__producto__vehiculo__modelo__marca"
+    )
+    total = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
+    desde = request.GET.get("desde") or "—"
+    hasta = request.GET.get("hasta") or "—"
+    datos = {"ventas": ventas, "total_general": total}
+    response = HttpResponse(
+        ventas_pdf_bytes(datos, desde, hasta), content_type="application/pdf"
+    )
+    response["Content-Disposition"] = 'attachment; filename="ventas.pdf"'
+    return response
+
+
+@permiso_requerido("ventas", "ver")
+def ventas_exportar_excel(request):
+    ventas = ventas_filtradas(request).prefetch_related(
+        "detalles__producto__vehiculo__modelo__marca"
+    )
+    total = ventas.aggregate(total=Sum("total_venta"))["total"] or Decimal("0")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Ventas"
+    # Una venta por bloque (encabezado + su detalle completo de productos),
+    # como el comprobante individual, en vez de una sola fila resumen por
+    # venta: para eso hace falta el detalle, no una tabla plana.
+    for venta in ventas:
+        ws.append(
+            [f"Venta #{venta.pk}", venta.fecha_venta, str(venta.tipo_documento), str(venta.forma_pago), str(venta.usuario)]
+        )
+        for celda in ws[ws.max_row]:
+            celda.font = Font(bold=True)
+
+        if venta.observaciones:
+            ws.append([f"Observaciones: {venta.observaciones}"])
+            ws[ws.max_row][0].font = Font(italic=True)
+
+        ws.append(["Producto", "Vehículo", "Cantidad", "Precio", "Subtotal"])
+        for celda in ws[ws.max_row]:
+            celda.font = Font(italic=True)
+
+        for detalle in venta.detalles.all():
+            ws.append(
+                [
+                    str(detalle.producto),
+                    str(detalle.producto.vehiculo) if detalle.producto.vehiculo_id else "",
+                    detalle.cantidad,
+                    detalle.precio,
+                    detalle.subtotal,
+                ]
+            )
+
+        if venta.monto_total is not None:
+            ws.append(["", "", "", "Neto", venta.monto_neto])
+            ws.append(["", "", "", "IVA (19%)", venta.monto_iva])
+            ws.append(["", "", "", "Total", venta.monto_total])
+        else:
+            ws.append(["", "", "", "Total", venta.total_venta])
+        for celda in ws[ws.max_row]:
+            celda.font = Font(bold=True)
+
+        ws.append([])
+
+    ws.append(["", "", "", "Total general", total])
+    for celda in ws[ws.max_row]:
+        celda.font = Font(bold=True)
+
+    for fila in ws.iter_rows(min_row=1, min_col=4, max_col=5):
+        for celda in fila:
+            celda.number_format = "#,##0"
+    for columna, ancho in {"A": 26, "B": 20, "C": 12, "D": 16, "E": 14}.items():
+        ws.column_dimensions[columna].width = ancho
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="ventas.xlsx"'
+    wb.save(response)
+    return response

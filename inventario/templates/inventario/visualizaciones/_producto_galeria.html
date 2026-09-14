@@ -1,0 +1,38 @@
+{% if producto.pk %}
+<div class="foto-galeria">
+    <h3 class="foto-galeria__titulo">Fotos del producto</h3>
+    {% with fotos=producto.fotos.all %}
+    {% if fotos %}
+    <div class="foto-galeria__grid">
+        {% for foto in fotos %}
+        <div class="foto-galeria__item{% if foto.es_principal %} foto-galeria__item--principal{% endif %}">
+            <a href="{{ foto.imagen.url }}" target="_blank" rel="noopener">
+                <img src="{{ foto.imagen.url }}" alt="" class="foto-galeria__img">
+            </a>
+            {% if foto.es_principal %}<span class="foto-galeria__badge">Principal</span>{% endif %}
+            <div class="foto-galeria__acciones">
+                <form method="post" action="{% url 'producto_foto_mover' producto.pk foto.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" name="direccion" value="arriba" class="btn btn-sm" title="Mover antes" {% if forloop.first %}disabled{% endif %}>&uarr;</button>
+                    <button type="submit" name="direccion" value="abajo" class="btn btn-sm" title="Mover después" {% if forloop.last %}disabled{% endif %}>&darr;</button>
+                </form>
+                {% if not foto.es_principal %}
+                <form method="post" action="{% url 'producto_foto_principal' producto.pk foto.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm" title="Marcar como principal">&starf;</button>
+                </form>
+                {% endif %}
+                <form method="post" action="{% url 'producto_foto_eliminar' producto.pk foto.pk %}" onsubmit="return confirm('¿Eliminar esta foto?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger" title="Eliminar foto">&times;</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="inventory-muted">Este producto todavía no tiene fotos.</p>
+    {% endif %}
+    {% endwith %}
+</div>
+{% endif %}

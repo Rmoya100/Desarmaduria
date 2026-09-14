@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Eliminar venta · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Eliminar venta</h1>
+</div>
+
+<div class="form-card">
+    <p>
+        ¿Seguro que querés eliminar la venta #{{ venta.pk }} del
+        <strong>{{ venta.fecha_venta }}</strong> ({{ venta.tipo_documento }},
+        {{ venta.forma_pago }})? Esta acción no se puede deshacer y devolverá
+        el stock de los productos vendidos.
+    </p>
+
+    <form method="post" class="form-actions">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <a href="{% url 'ventas' %}" class="btn">Cancelar</a>
+    </form>
+</div>
+{% endblock %}

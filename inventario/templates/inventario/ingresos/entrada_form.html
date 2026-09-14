@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ titulo }} · Desarmaduría{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/inventario.css' %}">
+{% endblock %}
+
+{% block content %}
+{% if entrada %}{% url 'ingreso_detalle' entrada.pk as url_cancelar %}{% else %}{% url 'ingresos' as url_cancelar %}{% endif %}
+
+<div class="page-header page-header--actions">
+    <h1>{{ titulo }}</h1>
+    {% if grupos %}
+    <div class="page-header__actions">
+        {% comment %}
+            El atributo `form` permite enviar el formulario desde un boton que
+            esta fuera de el: con cientos de piezas en la tabla, el boton del
+            pie queda muy lejos y este par de arriba siempre esta a la vista.
+        {% endcomment %}
+        <button type="submit" form="ingreso-form" class="btn btn-primary">Guardar ingreso</button>
+        <a href="{{ url_cancelar }}" class="btn">Cancelar</a>
+    </div>
+    {% endif %}
+</div>
+
+{% if form_lineas.non_field_errors %}
+<div class="alert alert-error" role="alert">
+    <ul class="errorlist">
+        {% for error in form_lineas.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form method="post" novalidate id="ingreso-form" class="ingreso-form" data-ingreso-form enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div class="form-card form-card--ancho ingreso-card">
+        <fieldset class="form-seccion">
+            <legend class="form-seccion__titulo">
+                <span class="form-seccion__paso" aria-hidden="true">1</span>Datos del ingreso
+            </legend>
+            <div class="ingreso-campos">
+                <div class="field">
+                    <label for="{{ form.fecha.id_for_label }}">{{ form.fecha.label }}</label>
+                    {{ form.fecha }}
+                    {% if form.fecha.errors %}
+                    <ul class="errorlist">{% for error in form.fecha.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="form-seccion">
+            <legend class="form-seccion__titulo">
+                <span class="form-seccion__paso" aria-hidden="true">2</span>Vehículo desarmado
+            </legend>
+            <p class="ingreso-ayuda">
+                Marca, modelo y tipo se guardan siempre en MAYÚSCULAS. El año hasta
+                indica la última generación compatible: déjalo vacío si el vehículo
+                es de un solo año. Si la ficha ya existe se reutiliza en lugar de
+                duplicarla.
+            </p>
+            <div class="ingreso-campos">
+                {% for field in form_vehiculo %}
+                <div class="field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}
+                    <ul class="errorlist">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% if form_vehiculo.non_field_errors %}
+            <ul class="errorlist">
+                {% for error in form_vehiculo.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+
+            <datalist id="lista-marcas">
+                {% for marca in marcas %}<option value="{{ marca.nombre_marca }}"></option>{% endfor %}
+            </datalist>
+            <datalist id="lista-modelos">
+                {% for modelo in modelos %}<option value="{{ modelo }}"></option>{% endfor %}
+            </datalist>
+            <datalist id="lista-tipos">
+                {% for tipo in tipos %}<option value="{{ tipo.nombre_tipo }}"></option>{% endfor %}
+            </datalist>
+        </fieldset>
+
+        {% if grupos %}
+        <fieldset class="form-seccion">
+            <legend class="form-seccion__titulo">
+                <span class="form-seccion__paso" aria-hidden="true">3</span>{% if es_edicion %}Agregar más piezas{% else %}Categorías a ingresar{% endif %}
+            </legend>
+            {% if es_edicion %}
+            <p class="ingreso-ayuda">
+                Abajo están las piezas que ya tiene este ingreso. ¿Faltó alguna?
+                Agrégala desde acá.
+            </p>
+            <button type="button" class="btn btn-primary" data-abrir-agregar>+ Agregar piezas</button>
+            {% else %}
+            <p class="ingreso-ayuda">
+                Elige una categoría, anota las cantidades de las piezas que
+                recibiste y pasa a la siguiente. Las piezas con cantidad quedan
+                a la vista aunque cambies de categoría.
+            </p>
+            <div class="ingreso-chips">
+                {% for grupo in grupos %}
+                <label class="ingreso-chip">
+                    <input
+                        type="checkbox"
+                        class="visually-hidden"
+                        name="categorias"
+                        value="{{ grupo.categoria.pk }}"
+                        id="categoria-{{ grupo.categoria.pk }}"
+                        data-categoria
+                        {% if grupo.seleccionada %}checked{% endif %}
+                    >
+                    <span class="ingreso-chip__cara">
+                        <span class="ingreso-chip__check" aria-hidden="true">✓</span>
+                        {{ grupo.categoria.nombre_categoria }}
+                        <span class="ingreso-chip__conteo">{{ grupo.piezas|length }}<span class="visually-hidden"> piezas</span></span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </fieldset>
+        {% endif %}
+    </div>
+
+    {% if grupos %}
+    <div class="table-panel" data-piezas>
+        <div class="table-panel__header">
+            <div>
+                <h2><span class="form-seccion__paso" aria-hidden="true">4</span>{% if es_edicion %}Piezas de este ingreso{% else %}Piezas y cantidades{% endif %}</h2>
+                <span>
+                    Indica cuántas unidades quedan en condiciones de venderse. Si de
+                    dos puertas solo una sirve, ingresa 1. Poner 0 quita la pieza del ingreso.
+                </span>
+            </div>
+            <div class="ingreso-piezas__acciones">
+                <div class="filter-field">
+                    <label for="buscar-pieza">Buscar pieza</label>
+                    <input type="search" id="buscar-pieza" class="input-control" placeholder="Nombre de la pieza" data-buscar>
+                </div>
+                <button type="button" class="btn btn-sm" data-limpiar>Limpiar cantidades</button>
+            </div>
+        </div>
+
+        <p class="empty-state" data-sin-categorias hidden>
+            {% if es_edicion %}Este ingreso todavía no tiene piezas. Elige una categoría arriba para agregarlas.{% else %}Elige una categoría arriba para ver sus piezas.{% endif %}
+        </p>
+        <p class="empty-state" data-sin-resultados hidden>
+            Ninguna pieza coincide con la búsqueda.
+        </p>
+
+        <div class="table-scroll">
+            <table class="data-table ingreso-tabla">
+                <caption class="visually-hidden">Piezas disponibles por categoría y cantidad a ingresar</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Pieza</th>
+                        <th scope="col" class="ingreso-tabla__cantidad">Cantidad</th>
+                        <th scope="col" class="ingreso-tabla__precio">Precio venta est.</th>
+                        <th scope="col" class="ingreso-tabla__foto">Foto</th>
+                    </tr>
+                </thead>
+                {% for grupo in grupos %}
+                <tbody data-grupo="{{ grupo.categoria.pk }}">
+                    <tr class="ingreso-grupo">
+                        <th scope="rowgroup" colspan="4">{{ grupo.categoria.nombre_categoria }}</th>
+                    </tr>
+                    {% for fila in grupo.piezas %}
+                    <tr data-pieza data-nombre="{{ fila.pieza.nombre }}">
+                        <td>{{ fila.pieza.nombre }}</td>
+                        <td class="ingreso-tabla__cantidad">
+                            <input
+                                type="number"
+                                class="input-control"
+                                name="cantidad_{{ fila.pieza.pk }}"
+                                value="{{ fila.cantidad }}"
+                                min="0"
+                                max="9999"
+                                step="1"
+                                inputmode="numeric"
+                                placeholder="0"
+                                aria-label="Cantidad de {{ fila.pieza.nombre }}"
+                                data-cantidad
+                            >
+                        </td>
+                        <td class="ingreso-tabla__precio">
+                            <input
+                                type="number"
+                                class="input-control"
+                                name="precio_{{ fila.pieza.pk }}"
+                                value="{{ fila.precio }}"
+                                min="0"
+                                step="0.01"
+                                inputmode="decimal"
+                                placeholder="$0"
+                                aria-label="Precio de venta estimado de {{ fila.pieza.nombre }}"
+                                data-precio
+                            >
+                        </td>
+                        <td class="ingreso-tabla__foto">
+                            <input
+                                type="file"
+                                name="foto_{{ fila.pieza.pk }}"
+                                accept="image/*"
+                                class="visually-hidden"
+                                data-foto-input
+                                tabindex="-1"
+                                aria-hidden="true"
+                            >
+                            <button
+                                type="button"
+                                class="btn btn-sm foto-boton"
+                                data-foto-abrir
+                                data-pieza-nombre="{{ fila.pieza.nombre }}"
+                                aria-label="Adjuntar foto de {{ fila.pieza.nombre }}"
+                                title="Adjuntar foto"
+                            >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.3-2h7l1.3 2h2.2A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-9z"></path>
+                                    <circle cx="12" cy="13" r="3.5"></circle>
+                                </svg>
+                            </button>
+                            <span class="foto-preview" data-foto-preview></span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="ingreso-resumen">
+        <p aria-live="polite" data-resumen>Sin piezas seleccionadas.</p>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar ingreso</button>
+            <a href="{{ url_cancelar }}" class="btn">Cancelar</a>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>
+            El catálogo de piezas está vacío. Crea primero las piezas genéricas
+            (sin vehículo asignado) desde el módulo de Productos.
+        </p>
+        <a href="{% url 'productos_lista' %}" class="btn btn-primary">Ir a Productos</a>
+    </div>
+    {% endif %}
+
+    {% if es_edicion and grupos %}
+    <div class="inventory-modal" id="modal-agregar-piezas" data-modal-agregar aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="modal-agregar-titulo">
+        <div class="inventory-modal__dialog">
+            <button type="button" class="inventory-modal__close" data-cerrar-agregar aria-label="Cerrar">&times;</button>
+            <h2 id="modal-agregar-titulo">Agregar piezas al ingreso</h2>
+            <p class="inventory-muted">Marca las que faltaron. Se agregan con cantidad 1 y la ajustás en la tabla.</p>
+            <label for="modal-cat-piezas">Categoría</label>
+            <select id="modal-cat-piezas" class="input-control" data-modal-cat>
+                <option value="">Todas las categorías</option>
+                {% for grupo in grupos %}<option value="{{ grupo.categoria.pk }}">{{ grupo.categoria.nombre_categoria }}</option>{% endfor %}
+            </select>
+            <label for="modal-buscar-piezas">Buscar pieza</label>
+            <input type="search" id="modal-buscar-piezas" class="input-control" placeholder="Nombre de la pieza" data-modal-buscar autocomplete="off">
+            <div class="inventory-modal__body modal-piezas-lista" data-modal-lista>
+                {% for grupo in grupos %}{% for fila in grupo.piezas %}{% if not fila.cantidad %}
+                <label class="modal-pieza" data-modal-pieza data-cat="{{ grupo.categoria.pk }}" data-nombre="{{ fila.pieza.nombre }}">
+                    <input type="checkbox" value="{{ fila.pieza.pk }}" data-agregar-pieza>
+                    <span>{{ fila.pieza.nombre }} <small class="inventory-muted">{{ grupo.categoria.nombre_categoria }}</small></span>
+                </label>
+                {% endif %}{% endfor %}{% endfor %}
+                <p class="empty-state" data-modal-vacio hidden>Ninguna pieza coincide.</p>
+            </div>
+            <div class="inventory-modal__actions">
+                <button type="button" class="btn" data-cerrar-agregar>Cancelar</button>
+                <button type="button" class="btn btn-primary" data-confirmar-agregar>Agregar seleccionadas</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if grupos %}
+    {% comment %}
+        Una sola hoja para toda la tabla: con cientos de filas, repetir los
+        dos botones por fila infla el DOM y aprieta la columna en el celular.
+        El JS recuerda que fila la abrio y ajusta `capture` en su input.
+    {% endcomment %}
+    <div class="foto-sheet" data-foto-sheet hidden role="dialog" aria-modal="true" aria-labelledby="foto-sheet-titulo">
+        <div class="foto-sheet__fondo" data-foto-sheet-cerrar></div>
+        <div class="foto-sheet__panel">
+            <p class="foto-sheet__titulo" id="foto-sheet-titulo" data-foto-sheet-titulo>Foto de la pieza</p>
+            <button type="button" class="btn foto-sheet__opcion" data-foto-modo="camara">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.3-2h7l1.3 2h2.2A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-9z"></path>
+                    <circle cx="12" cy="13" r="3.5"></circle>
+                </svg>
+                Tomar foto
+            </button>
+            <button type="button" class="btn foto-sheet__opcion" data-foto-modo="galeria">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
+                    <circle cx="8.5" cy="10" r="1.6"></circle>
+                    <path d="M4 17l5-5 3.5 3.5L16 12l4 4"></path>
+                </svg>
+                Elegir de galería
+            </button>
+            <button type="button" class="btn foto-sheet__cancelar" data-foto-sheet-cerrar>Cancelar</button>
+        </div>
+    </div>
+    {% endif %}
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/ingresos.js' %}"></script>
+{% endblock %}

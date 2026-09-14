@@ -13,9 +13,12 @@ from .models import (
     Modelo,
     Permiso,
     Producto,
+    ProductoFoto,
     Rol,
     RolPermiso,
+    SaldoInicial,
     TipoDocumento,
+    TipoVehiculo,
     Usuario,
     Vehiculo,
     Venta,
@@ -30,6 +33,13 @@ class DetalleVentaInline(admin.TabularInline):
 class DetalleEntradaInline(admin.TabularInline):
     model = DetalleEntrada
     extra = 1
+
+
+class ProductoFotoInline(admin.TabularInline):
+    model = ProductoFoto
+    extra = 0
+    fields = ("imagen", "es_principal", "orden", "ancho_px", "alto_px", "peso_bytes")
+    readonly_fields = ("ancho_px", "alto_px", "peso_bytes")
 
 
 @admin.register(Usuario)
@@ -84,16 +94,26 @@ class UsuarioAdmin(BaseUserAdmin):
 
 @admin.register(Vehiculo)
 class VehiculoAdmin(admin.ModelAdmin):
-    list_display = ("patente", "modelo", "anio")
-    list_filter = ("modelo__marca", "anio")
-    search_fields = ("patente",)
+    list_display = ("modelo", "tipo_vehiculo", "anio_desde", "anio_hasta", "patente")
+    list_filter = ("modelo__marca", "tipo_vehiculo", "anio_desde")
+    search_fields = ("patente", "modelo__nombre_modelo")
 
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "categoria", "vehiculo", "costo")
-    list_filter = ("categoria",)
-    search_fields = ("nombre",)
+    list_display = (
+        "codigo",
+        "nombre",
+        "categoria",
+        "vehiculo",
+        "costo",
+        "precio_venta",
+        "fecha_eliminacion",
+        "eliminado_por",
+    )
+    list_filter = ("categoria", "fecha_eliminacion")
+    search_fields = ("nombre", "codigo")
+    inlines = [ProductoFotoInline]
 
 
 @admin.register(Venta)
@@ -112,8 +132,13 @@ class EntradaAdmin(admin.ModelAdmin):
 
 @admin.register(Gasto)
 class GastoAdmin(admin.ModelAdmin):
-    list_display = ("id_gasto", "concepto", "fecha", "monto", "usuario")
-    list_filter = ("fecha", "concepto")
+    list_display = ("id_gasto", "concepto", "forma_pago", "fecha", "monto", "usuario")
+    list_filter = ("fecha", "concepto", "forma_pago")
+
+
+@admin.register(SaldoInicial)
+class SaldoInicialAdmin(admin.ModelAdmin):
+    list_display = ("monto", "fecha", "usuario", "fecha_actualizacion")
 
 
 admin.site.register(
@@ -123,6 +148,7 @@ admin.site.register(
         RolPermiso,
         Marca,
         Modelo,
+        TipoVehiculo,
         Categoria,
         FormaPago,
         TipoDocumento,

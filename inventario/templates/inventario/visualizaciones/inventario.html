@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% load static monedas %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
+{% block title %}Inventario · Desarmaduría{% endblock %}
+{% block content %}
+
+<div class="metric-grid">
+    {% for metrica in metricas %}<article class="metric-card"><span>{{ metrica.titulo }}</span><strong data-metric="{{ metrica.clave }}">{{ metrica.valor }}</strong><small>{{ metrica.detalle }}</small></article>{% endfor %}
+</div>
+
+<form method="get" class="inventario-filtros">
+    <div class="inventory-toolbar">
+        <div class="inventory-toolbar__fields">
+            <div class="filter-field"><label for="id_categoria">Categoría</label>{{ form.categoria }}</div>
+            <div class="filter-field"><label for="id_marca">Marca</label>{{ form.marca }}</div>
+            <div class="filter-field"><label for="id_modelo">Modelo</label>{{ form.modelo }}</div>
+        </div>
+        <div class="inventory-toolbar__actions">
+            <noscript><button type="submit" class="btn btn-primary">Aplicar filtros</button></noscript>
+            <a href="{% url 'inventario_visualizacion' %}" class="btn" data-limpiar>Limpiar</a>
+        </div>
+    </div>
+
+    <section class="table-panel">
+        <div class="table-panel__header">
+            <div>
+                <p class="eyebrow">Detalle de inventario</p>
+                <p class="table-count" aria-live="polite">{{ productos|length }} productos</p>
+            </div>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table tabla-cards inventario-tabla">
+                <thead>
+                    <tr>
+                        <th data-col="nombre">
+                            <span class="col-head">Producto
+                                <span class="col-sort" role="group" aria-label="Ordenar por producto">
+                                    <button type="submit" name="orden" value="nombre" data-orden="nombre" class="col-sort__btn{% if orden_actual == 'nombre' %} is-active{% endif %}" title="Ordenar A-Z" aria-label="Ordenar producto de A a Z">A-Z</button>
+                                    <button type="submit" name="orden" value="-nombre" data-orden="-nombre" class="col-sort__btn{% if orden_actual == '-nombre' %} is-active{% endif %}" title="Ordenar Z-A" aria-label="Ordenar producto de Z a A">Z-A</button>
+                                </span>
+                            </span>
+                        </th>
+                        <th data-col="categoria">
+                            <span class="col-head">Categoría
+                                <span class="col-sort" role="group" aria-label="Ordenar por categoría">
+                                    <button type="submit" name="orden" value="categoria" data-orden="categoria" class="col-sort__btn{% if orden_actual == 'categoria' %} is-active{% endif %}" title="Ordenar A-Z" aria-label="Ordenar categoría de A a Z">A-Z</button>
+                                    <button type="submit" name="orden" value="-categoria" data-orden="-categoria" class="col-sort__btn{% if orden_actual == '-categoria' %} is-active{% endif %}" title="Ordenar Z-A" aria-label="Ordenar categoría de Z a A">Z-A</button>
+                                </span>
+                            </span>
+                        </th>
+                        <th data-col="vehiculo">Automóvil</th>
+                        <th data-col="entradas">Entradas</th>
+                        <th data-col="vendidas">Vendidas</th>
+                        <th data-col="disponible">
+                            <span class="col-head">Disponible
+                                <span class="col-sort" role="group" aria-label="Ordenar por disponible">
+                                    <button type="submit" name="orden" value="disponible" data-orden="disponible" class="col-sort__btn col-sort__btn--arrow{% if orden_actual == 'disponible' %} is-active{% endif %}" title="Menos primero" aria-label="Ordenar disponible de menor a mayor">&#9650;</button>
+                                    <button type="submit" name="orden" value="-disponible" data-orden="-disponible" class="col-sort__btn col-sort__btn--arrow{% if orden_actual == '-disponible' %} is-active{% endif %}" title="Más primero" aria-label="Ordenar disponible de mayor a menor">&#9660;</button>
+                                </span>
+                            </span>
+                        </th>
+                        <th data-col="precio">Precio de venta estimado</th>
+                        <th data-col="valor">
+                            <span class="col-head">Valor en stock
+                                <span class="col-sort" role="group" aria-label="Ordenar por valor en stock">
+                                    <button type="submit" name="orden" value="valor" data-orden="valor" class="col-sort__btn col-sort__btn--arrow{% if orden_actual == 'valor' %} is-active{% endif %}" title="Menor valor primero" aria-label="Ordenar valor de menor a mayor">&#9650;</button>
+                                    <button type="submit" name="orden" value="-valor" data-orden="-valor" class="col-sort__btn col-sort__btn--arrow{% if orden_actual == '-valor' %} is-active{% endif %}" title="Mayor valor primero" aria-label="Ordenar valor de mayor a menor">&#9660;</button>
+                                </span>
+                            </span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for producto in productos %}
+                <tr data-id="{{ producto.pk }}">
+                    <td data-label="Producto"><strong>{{ producto.nombre }}</strong></td>
+                    <td data-label="Categoría">{{ producto.categoria.nombre_categoria }}</td>
+                    <td data-label="Automóvil">{% if producto.vehiculo %}{{ producto.vehiculo.modelo.marca.nombre_marca }} {{ producto.vehiculo.modelo.nombre_modelo }} · {{ producto.vehiculo.rango_anios }}{% else %}<span class="inventory-muted">Sin vehículo informado</span>{% endif %}</td>
+                    <td data-label="Entradas">{{ producto.total_entradas }}</td>
+                    <td data-label="Vendidas">{{ producto.total_vendido }}</td>
+                    <td data-label="Disponible"><span class="stock-badge{% if producto.stock_disponible <= 0 %} stock-badge--empty{% endif %}">{{ producto.stock_disponible }}</span></td>
+                    <td data-label="Precio de venta estimado">{% if producto.precio_venta is not None %}{{ producto.precio_venta|clp }}{% else %}<span class="inventory-muted">Sin precio</span>{% endif %}</td>
+                    <td data-label="Valor en stock" class="value-cell">{{ producto.valor_stock|clp }}</td>
+                </tr>
+                {% empty %}<tr><td colspan="8" class="empty-state">No hay productos que coincidan con los filtros.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="table-panel__pager" data-pager hidden>
+            <div class="table-panel__pager-tam">
+                <label for="id-pager-tam">Mostrar</label>
+                <select id="id-pager-tam" class="input-control" data-pager-tamano>
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="15">15</option>
+                </select>
+                <span>filas</span>
+            </div>
+            <div class="table-panel__pager-nav">
+                <button type="button" class="btn btn-sm" data-pager-anterior>&larr; Anterior</button>
+                <span data-pager-info aria-live="polite">Página 1 de 1</span>
+                <button type="button" class="btn btn-sm" data-pager-siguiente>Siguiente &rarr;</button>
+            </div>
+        </div>
+    </section>
+</form>
+
+{{ productos_datos|json_script:"inventario-datos" }}
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/inventario.js' %}"></script>{% endblock %}

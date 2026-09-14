@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Eliminar ingreso · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Eliminar ingreso #{{ entrada.pk }}</h1>
+</div>
+
+<div class="form-card">
+    <p>
+        ¿Seguro que quieres eliminar el ingreso del <strong>{{ entrada.fecha }}</strong>
+        {% if entrada.vehiculo %}
+        de {{ entrada.vehiculo.modelo.marca.nombre_marca }}
+        {{ entrada.vehiculo.modelo.nombre_modelo }} {{ entrada.vehiculo.rango_anios }}
+        {% endif %}?
+        Se descontarán <strong>{{ total_unidades }}</strong> unidades del inventario y
+        la acción no se puede deshacer.
+    </p>
+
+    {% if detalles %}
+    <ul class="ingreso-lista-piezas">
+        {% for detalle in detalles %}
+        <li>{{ detalle.cantidad }} × {{ detalle.producto.nombre }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <form method="post" class="form-actions">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <a href="{% url 'ingreso_detalle' entrada.pk %}" class="btn">Cancelar</a>
+    </form>
+</div>
+{% endblock %}

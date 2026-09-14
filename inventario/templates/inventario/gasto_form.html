@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}{% if object %}Editar gasto{% else %}Nuevo gasto{% endif %} · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{% if object %}Editar gasto{% else %}Nuevo gasto{% endif %}</h1>
+</div>
+
+{% include "inventario/_gastos_subnav.html" %}
+
+<div class="form-card">
+    <form method="post" class="form" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {% if field.name == "imagen" and object and object.imagen %}
+            <div class="image-preview">
+                <img src="{{ object.imagen.url }}" alt="Comprobante actual de {{ object }}">
+                <span>Imagen actual — selecciona un archivo para reemplazarla.</span>
+            </div>
+            {% endif %}
+            {{ field }}
+            {% if field.errors %}
+            <p class="form-error">{{ field.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="{% url 'gastos' %}" class="btn">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
