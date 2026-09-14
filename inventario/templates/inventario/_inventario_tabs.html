@@ -1,0 +1,8 @@
+{% comment %}
+Pestañas de la sección Inventario. Espera `seccion_activa` en el contexto
+('existencias' o 'ingresos').
+{% endcomment %}
+<div class="tabs">
+    <a href="{% url 'inventario' %}" class="tab{% if seccion_activa == 'existencias' %} active{% endif %}">Existencias</a>
+    <a href="{% url 'ingresos' %}" class="tab{% if seccion_activa == 'ingresos' %} active{% endif %}">Ingresos</a>
+</div>

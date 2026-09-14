@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 
-from ..models import Categoria, Producto, ProductoFoto, Vehiculo
+from ..models import Categoria, Marca, Modelo, Producto, ProductoFoto, Vehiculo
 from ..permisos import permiso_requerido, tiene_permiso
 from ..servicios.catalogo import importar_catalogo
 from ..servicios.inventario import productos_con_stock
@@ -27,6 +27,57 @@ ORDENES_VALIDOS = ("nombre", "-nombre", "categoria", "-categoria", "costo", "-co
 # Clave donde se guarda la vista previa entre el paso 1 (subir) y el paso 2
 # (confirmar). Se almacenan los datos ya interpretados, nunca el archivo.
 SESION_IMPORTACION = "importacion_catalogo"
+
+
+@permiso_requerido("ventas", "ver")
+def consulta_ventas(request):
+    """Catalogo disponible para vendedores, sin operaciones de inventario."""
+    productos = productos_con_stock().filter(stock_disponible__gt=0).select_related(
+        "vehiculo__tipo_vehiculo"
+    )
+    busqueda = request.GET.get("q", "").strip()
+    marca_id = request.GET.get("marca", "")
+    modelo_id = request.GET.get("modelo", "")
+
+    modelo = None
+    if modelo_id.isdigit():
+        modelo = Modelo.objects.filter(pk=modelo_id).select_related("marca").first()
+        if modelo:
+            # El modelo determina su marca; asi no se pueden enviar filtros
+            # inconsistentes y el select de marca queda sincronizado.
+            marca_id = str(modelo.marca_id)
+        else:
+            modelo_id = ""
+
+    if busqueda:
+        productos = productos.filter(
+            Q(nombre__icontains=busqueda)
+            | Q(codigo__icontains=busqueda)
+            | Q(categoria__nombre_categoria__icontains=busqueda)
+            | Q(vehiculo__modelo__marca__nombre_marca__icontains=busqueda)
+            | Q(vehiculo__modelo__nombre_modelo__icontains=busqueda)
+        )
+    if marca_id.isdigit():
+        productos = productos.filter(vehiculo__modelo__marca_id=marca_id)
+    if modelo:
+        productos = productos.filter(vehiculo__modelo=modelo)
+
+    marcas = Marca.objects.order_by("nombre_marca")
+    modelos = Modelo.objects.order_by("marca__nombre_marca", "nombre_modelo")
+    if marca_id.isdigit():
+        modelos = modelos.filter(marca_id=marca_id)
+    return render(
+        request,
+        "inventario/visualizaciones/consulta_ventas.html",
+        {
+            "productos": productos.order_by("nombre", "codigo"),
+            "marcas": marcas,
+            "modelos": modelos,
+            "busqueda": busqueda,
+            "marca_id": marca_id,
+            "modelo_id": modelo_id,
+        },
+    )
 
 
 def _productos_filtrados(request, *, forzar_con_stock=False):

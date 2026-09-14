@@ -3,6 +3,7 @@ from django.views.generic import RedirectView
 
 from .views import (
     inventario_visualizacion,
+    consulta_ventas,
     producto_crear,
     producto_editar,
     producto_eliminar,
@@ -18,6 +19,7 @@ from .views import (
 
 urlpatterns = [
     path("", inventario_visualizacion, name="inventario_visualizacion"),
+    path("vendedores/", consulta_ventas, name="consulta_ventas"),
     # "Existencias" e "Inventario valorizado" se unificaron en una sola
     # pantalla; esta ruta se mantiene solo para no romper enlaces guardados.
     path(

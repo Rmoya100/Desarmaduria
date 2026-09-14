@@ -529,6 +529,7 @@ class ProductosJsonVentaTests(TestCase):
     `renderizarListaModal`)."""
 
     def test_incluye_vehiculo_para_distinguir_productos_repetidos(self):
+        usuario = crear_usuario("productos_json_test")
         categoria = Categoria.objects.create(nombre_categoria="Motor")
         vehiculo = Vehiculo.objects.create(
             modelo=Modelo.objects.create(
@@ -537,8 +538,17 @@ class ProductosJsonVentaTests(TestCase):
             anio_desde=2007,
             anio_hasta=2012,
         )
-        Producto.objects.create(categoria=categoria, nombre="Alternador", vehiculo=vehiculo)
-        Producto.objects.create(categoria=categoria, nombre="Alternador")  # plantilla
+        con_vehiculo = Producto.objects.create(
+            categoria=categoria, nombre="Alternador", vehiculo=vehiculo
+        )
+        sin_vehiculo = Producto.objects.create(categoria=categoria, nombre="Alternador")  # plantilla
+
+        # _productos_json() solo trae productos con stock (ver
+        # _productos_json en views.py): sin esto ninguno de los dos
+        # aparecería y el test no probaría lo que dice probar.
+        entrada = Entrada.objects.create(fecha="2026-01-01", usuario=usuario)
+        DetalleEntrada.objects.create(entrada=entrada, producto=con_vehiculo, cantidad=1)
+        DetalleEntrada.objects.create(entrada=entrada, producto=sin_vehiculo, cantidad=1)
 
         datos = _productos_json()
         con_vehiculo = [d for d in datos if d["nombre"] == "ALTERNADOR" and d["vehiculo"]]
@@ -616,13 +626,11 @@ class SidebarSubmenuTests(TestCase):
         self.assertIn("<summary", html)
         # La clase antigua ya no debe decidir la visibilidad del submenu.
         self.assertNotIn("nav-group--active", html)
-        # El sidebar tiene un solo grupo desplegable: Productos (Listado,
-        # Edicion masiva, Importar). Inventario es un enlace directo desde
-        # que Existencias e Inventario valorizado se unificaron en una sola
-        # pantalla. Si un comentario `{# #}` quedara abierto apareceria un
-        # <details> de mas o de menos.
+        # El sidebar tiene un solo grupo desplegable: Productos. Inventario
+        # incluye ahora el acceso de consulta para ventas. Si un comentario
+        # `{# #}` quedara abierto apareceria un <details> de mas o de menos.
         self.assertEqual(html.count("<details"), 1)
-        self.assertEqual(html.count('class="nav-sublink'), 3)
+        self.assertEqual(html.count('class="nav-sublink'), 4)
 
     def test_las_plantillas_no_emiten_comentarios_literales(self):
         """`{# ... #}` solo comenta una linea. Si se abre y no se cierra en la
@@ -1027,3 +1035,86 @@ class IngresoPrecioVentaTests(TestCase):
         respuesta = self.client.get(reverse("ingreso_detalle", args=[entrada_pk]))
         self.assertEqual(respuesta.status_code, 200)
         self.assertIn("$12.345", respuesta.content.decode())
+
+
+class ConsultaVendedoresTests(TestCase):
+    def setUp(self):
+        self.rol = Rol.objects.get(nombre_rol="Administrador")
+        self.usuario = crear_usuario("consulta-vendedor", rol=self.rol)
+        self.client.force_login(self.usuario)
+        self.categoria = Categoria.objects.create(nombre_categoria="Frenos")
+        self.marca = Marca.objects.create(nombre_marca="Toyota")
+        self.modelo = Modelo.objects.create(marca=self.marca, nombre_modelo="Yaris")
+        self.otro_marca = Marca.objects.create(nombre_marca="Honda")
+        self.otro_modelo = Modelo.objects.create(marca=self.otro_marca, nombre_modelo="Civic")
+        self.vehiculo = Vehiculo.objects.create(
+            modelo=self.modelo, anio_desde=2014, anio_hasta=2018,
+        )
+        self.producto = Producto.objects.create(
+            codigo="PAST-01", categoria=self.categoria, nombre="Pastillas delanteras",
+            vehiculo=self.vehiculo, precio_venta=Decimal("25000"), costo=Decimal("1000"),
+        )
+        categoria_agotado = Categoria.objects.create(nombre_categoria="Agotados")
+        Producto.objects.create(categoria=categoria_agotado, nombre="Agotado")
+        entrada = Entrada.objects.create(fecha="2026-01-01", usuario=self.usuario)
+        DetalleEntrada.objects.create(entrada=entrada, producto=self.producto, cantidad=3)
+
+    def test_muestra_solo_stock_y_datos_de_vehiculo(self):
+        respuesta = self.client.get(reverse("consulta_ventas"))
+        self.assertEqual(respuesta.status_code, 200)
+        productos = list(respuesta.context["productos"])
+        self.assertEqual([producto.pk for producto in productos], [self.producto.pk])
+        contenido = respuesta.content.decode()
+        self.assertIn("PAST-01", contenido)
+        self.assertIn("TOYOTA YARIS", contenido)
+        self.assertIn("2014-2018", contenido)
+
+    def test_busqueda_considera_codigo_marca_y_modelo(self):
+        for termino in ("PAST-01", "TOYOTA", "YARIS", "FRENOS"):
+            respuesta = self.client.get(reverse("consulta_ventas"), {"q": termino})
+            self.assertEqual(respuesta.context["productos"].count(), 1, termino)
+
+    def test_filtros_cruzados_restringen_modelos_y_sincronizan_marca(self):
+        respuesta = self.client.get(reverse("consulta_ventas"), {"marca": self.marca.pk})
+        self.assertEqual(list(respuesta.context["modelos"]), [self.modelo])
+
+        respuesta = self.client.get(reverse("consulta_ventas"), {"modelo": self.modelo.pk})
+        self.assertEqual(respuesta.context["marca_id"], str(self.marca.pk))
+        self.assertEqual(respuesta.context["modelos"].count(), 1)
+
+    def test_usuario_sin_ventas_ver_recibe_403_y_superusuario_puede_ver(self):
+        sin_permiso = Rol.objects.create(nombre_rol="Sin consulta")
+        usuario = crear_usuario("sin-consulta", rol=sin_permiso)
+        self.client.force_login(usuario)
+        self.assertEqual(self.client.get(reverse("consulta_ventas")).status_code, 403)
+
+        usuario.is_superuser = True
+        usuario.save(update_fields=["is_superuser"])
+        self.assertEqual(self.client.get(reverse("consulta_ventas")).status_code, 200)
+
+
+class BodegaAccessTests(TestCase):
+    def setUp(self):
+        self.rol = Rol.objects.get(nombre_rol="Bodega")
+        self.usuario = crear_usuario("bodega-test", rol=self.rol)
+        self.client.force_login(self.usuario)
+
+    def test_rol_tiene_solo_permisos_de_ver_y_crear_ingresos(self):
+        permisos = set(self.rol.rol_permisos.values_list("permiso__modulo", "permiso__nombre_permiso"))
+        self.assertEqual(permisos, {("ingresos", "ver"), ("ingresos", "crear")})
+
+    def test_bodega_es_redirigida_a_ingresos_y_no_ve_otro_menu(self):
+        respuesta = self.client.get(reverse("dashboard"))
+        self.assertRedirects(respuesta, reverse("ingresos"))
+        respuesta = self.client.get(reverse("ingresos"))
+        self.assertEqual(respuesta.status_code, 200)
+        contenido = respuesta.content.decode()
+        self.assertIn("Ingresos", contenido)
+        self.assertNotIn("Dashboard", contenido)
+        self.assertNotIn("Consulta para ventas", contenido)
+
+    def test_bodega_recibe_403_en_otros_modulos(self):
+        self.assertEqual(self.client.get(reverse("ventas")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("gastos")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("reportes")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("productos_lista")).status_code, 403)

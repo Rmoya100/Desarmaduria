@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Nuevo ingreso · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Nuevo ingreso</h1>
+</div>
+
+{% include "inventario/_inventario_tabs.html" with seccion_activa=seccion_activa %}
+
+<div class="form-card form-card--wide">
+    <form method="post" novalidate id="entrada-form" data-formset-prefix="{{ formset.prefix }}">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <ul class="errorlist">
+            {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+
+        {% for field in form %}
+        <div class="field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<span class="help-text">{{ field.help_text }}</span>{% endif %}
+            {% if field.errors %}
+            <ul class="errorlist">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <h2 class="detalle-titulo">Productos del despiece</h2>
+        {{ formset.management_form }}
+        {% if formset.non_form_errors %}
+        <ul class="errorlist">
+            {% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+
+        <table class="detalle-tabla">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th class="col-cantidad">Cantidad</th>
+                    <th class="col-quitar"></th>
+                </tr>
+            </thead>
+            <tbody id="detalle-body">
+                {% for f in formset %}
+                <tr class="detalle-fila">
+                    <td>
+                        {% for hidden in f.hidden_fields %}{{ hidden }}{% endfor %}
+                        {{ f.producto }}
+                        {% if f.producto.errors %}
+                        <ul class="errorlist">{% for e in f.producto.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </td>
+                    <td class="col-cantidad">
+                        {{ f.cantidad }}
+                        {% if f.cantidad.errors %}
+                        <ul class="errorlist">{% for e in f.cantidad.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </td>
+                    <td class="col-quitar">
+                        {% if formset.can_delete %}
+                        <label class="field--checkbox">{{ f.DELETE }} Quitar</label>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <button type="button" class="btn btn-sm" id="add-fila">+ Agregar línea</button>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar ingreso</button>
+            <a href="{% url 'ingresos' %}" class="btn">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+<template id="fila-vacia">
+    <tr class="detalle-fila">
+        <td>
+            {% for hidden in formset.empty_form.hidden_fields %}{{ hidden }}{% endfor %}
+            {{ formset.empty_form.producto }}
+        </td>
+        <td class="col-cantidad">{{ formset.empty_form.cantidad }}</td>
+        <td class="col-quitar">
+            <label class="field--checkbox">{{ formset.empty_form.DELETE }} Quitar</label>
+        </td>
+    </tr>
+</template>
+
+<script src="{% static 'js/entrada_form.js' %}"></script>
+{% endblock %}

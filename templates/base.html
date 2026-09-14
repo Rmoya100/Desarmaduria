@@ -44,6 +44,7 @@
                 Desarmaduría
             </a>
             <ul class="sidebar__nav">
+                {% if not request.user.rol_id or request.user.rol.nombre_rol|lower != 'bodega' %}
                 <li>
                     <a
                         href="{% url 'dashboard' %}"
@@ -77,6 +78,11 @@
                         </svg>
                         <span>Inventario</span>
                     </a>
+                    {% if request.user|tiene_permiso:"ventas:ver" %}
+                    <ul class="nav-submenu">
+                        <li><a href="{% url 'consulta_ventas' %}" class="nav-sublink{% if request.resolver_match.url_name == 'consulta_ventas' %} active{% endif %}">Consulta para ventas</a></li>
+                    </ul>
+                    {% endif %}
                 </li>
                 <li>
                     {% with seccion_productos='productos_lista producto_crear producto_editar productos_edicion_masiva productos_importar' %}
@@ -101,6 +107,7 @@
                     </details>
                     {% endwith %}
                 </li>
+                {% endif %}
                 {% if request.user|tiene_permiso:"ingresos:ver" %}
                 <li>
                     <a
@@ -116,6 +123,7 @@
                     </a>
                 </li>
                 {% endif %}
+                {% if not request.user.rol_id or request.user.rol.nombre_rol|lower != 'bodega' %}
                 {% if request.user|tiene_permiso:"ventas:ver" %}
                 <li>
                     <a
@@ -172,6 +180,7 @@
                         <span>Usuarios</span>
                     </a>
                 </li>
+                {% endif %}
                 {% endif %}
             </ul>
         </nav>

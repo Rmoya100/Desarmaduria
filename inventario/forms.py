@@ -1,18 +1,24 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
+from django.utils import timezone
 
 from .models import (
     Categoria,
     ConceptoGasto,
+    DetalleEntrada,
     DetalleVenta,
+    Entrada,
     FormaPago,
     Gasto,
+    Marca,
+    Modelo,
     Permiso,
     Producto,
     Rol,
     SaldoInicial,
     TipoDocumento,
     Usuario,
+    Vehiculo,
     Venta,
 )
 from .services import ImagenInvalidaError, validar_imagen
@@ -64,7 +70,7 @@ class GastoForm(forms.ModelForm):
             "imagen",
         ]
         widgets = {
-            "fecha": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "fecha": forms.DateInput(format="%Y-%m-%d", attrs={"class": "form-control", "type": "date"}),
             "monto": forms.NumberInput(
                 attrs={"class": "form-control", "step": "0.01", "min": "0"}
             ),
@@ -107,7 +113,7 @@ class SaldoInicialForm(forms.ModelForm):
             "monto": forms.NumberInput(
                 attrs={"class": "form-control", "step": "0.01", "min": "0"}
             ),
-            "fecha": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "fecha": forms.DateInput(format="%Y-%m-%d", attrs={"class": "form-control", "type": "date"}),
             "observaciones": forms.Textarea(
                 attrs={"class": "form-control", "rows": 3}
             ),
@@ -186,6 +192,117 @@ class TipoDocumentoForm(EstiloFormMixin, forms.ModelForm):
         fields = ["tipo_documento"]
 
 
+# ---------------------------------------------------------------------------
+# Ingreso de stock (Entrada + líneas de DetalleEntrada)
+#
+# Los <select> de marca/modelo/vehículo/producto se encadenan en el cliente
+# (inventario/entrada_form.js). Para que ese filtrado no dependa de llamadas
+# AJAX, cada <option> lleva los ids de sus padres como atributos `data-*`,
+# que estos widgets inyectan al renderizar.
+# ---------------------------------------------------------------------------
+class _DataAttrSelect(forms.Select):
+    """Select que copia datos de cada instancia a su <option> como `data-*`.
+
+    `data_attrs` es {nombre_atributo: campo_o_callable}. `campo` se lee con
+    getattr; `callable` recibe la instancia y devuelve el valor.
+    """
+
+    data_attrs: dict = {}
+
+    def create_option(self, *args, **kwargs):
+        option = super().create_option(*args, **kwargs)
+        value = option["value"]
+        instancia = getattr(value, "instance", None)
+        if instancia is not None:
+            for attr, fuente in self.data_attrs.items():
+                dato = fuente(instancia) if callable(fuente) else getattr(instancia, fuente)
+                option["attrs"][f"data-{attr}"] = dato
+        return option
+
+
+class ModeloSelect(_DataAttrSelect):
+    data_attrs = {"marca": "marca_id"}
+
+
+class VehiculoSelect(_DataAttrSelect):
+    data_attrs = {"marca": lambda v: v.modelo.marca_id, "modelo": "modelo_id"}
+
+
+class ProductoSelect(_DataAttrSelect):
+    data_attrs = {"vehiculo": "vehiculo_id", "modelo": lambda p: p.vehiculo.modelo_id}
+
+
+class EntradaForm(EstiloFormMixin, forms.ModelForm):
+    marca = forms.ModelChoiceField(
+        queryset=None,
+        required=False,
+        label="Marca",
+        help_text="Filtra los modelos disponibles.",
+    )
+    modelo = forms.ModelChoiceField(
+        queryset=None,
+        required=False,
+        label="Modelo",
+        widget=ModeloSelect,
+        help_text="Filtra los vehículos disponibles.",
+    )
+
+    class Meta:
+        model = Entrada
+        fields = ["fecha", "marca", "modelo", "vehiculo", "tipo_documento"]
+        widgets = {
+            "fecha": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "vehiculo": VehiculoSelect,
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["marca"].queryset = Marca.objects.order_by("nombre_marca")
+        self.fields["modelo"].queryset = (
+            Modelo.objects.select_related("marca").order_by(
+                "marca__nombre_marca", "nombre_modelo"
+            )
+        )
+        self.fields["vehiculo"].queryset = (
+            Vehiculo.objects.select_related("modelo__marca").order_by(
+                "modelo__marca__nombre_marca", "modelo__nombre_modelo", "anio"
+            )
+        )
+        self.fields["vehiculo"].label_from_instance = lambda v: (
+            f"{v.modelo} {v.anio}" + (f" · {v.patente}" if v.patente else "")
+        )
+        if not self.is_bound:
+            self.fields["fecha"].initial = timezone.localdate()
+
+
+class DetalleEntradaForm(EstiloFormMixin, forms.ModelForm):
+    cantidad = forms.IntegerField(min_value=1, label="Cantidad")
+
+    class Meta:
+        model = DetalleEntrada
+        fields = ["producto", "cantidad"]
+        widgets = {"producto": ProductoSelect}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["producto"].queryset = (
+            Producto.objects.select_related("vehiculo").order_by("nombre")
+        )
+        self.fields["producto"].label_from_instance = lambda p: p.nombre
+
+
+DetalleEntradaFormSet = forms.inlineformset_factory(
+    Entrada,
+    DetalleEntrada,
+    form=DetalleEntradaForm,
+    extra=1,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+)
+
+
 class CategoriaForm(EstiloFormMixin, forms.ModelForm):
     class Meta:
         model = Categoria
@@ -206,7 +323,10 @@ class VentaForm(EstiloFormMixin, forms.ModelForm):
         model = Venta
         fields = ["fecha_venta", "tipo_documento", "forma_pago", "observaciones"]
         widgets = {
-            "fecha_venta": forms.DateInput(attrs={"type": "date"}),
+            # format explicito: sin esto Django renderiza el value con el
+            # formato local (11/09/2026), que un <input type="date"> no
+            # reconoce y deja el campo en blanco al editar una venta.
+            "fecha_venta": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
             "observaciones": forms.Textarea(attrs={"rows": 2}),
         }
 
@@ -228,6 +348,18 @@ class DetalleVentaForm(EstiloFormMixin, forms.ModelForm):
             "cantidad": forms.HiddenInput(),
             "precio": forms.HiddenInput(),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Una linea existente puede apuntar a un producto que fue eliminado
+        # despues de la venta original. El queryset de arriba lo excluiria y
+        # bloquearia el guardado de la venta completa (incluso editando otro
+        # campo) sin mostrar ningun error visible. Se vuelve a incluir solo
+        # el producto ya asociado a esta linea puntual.
+        if self.instance.pk and self.instance.producto_id:
+            self.fields["producto"].queryset = self.fields["producto"].queryset | Producto.objects.filter(
+                pk=self.instance.producto_id
+            )
 
     def clean(self):
         cleaned_data = super().clean()

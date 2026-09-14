@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load static monedas %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inventario.css' %}">{% endblock %}
+{% block title %}Consulta para ventas · Inventario{% endblock %}
+{% block content %}
+<div class="inventory-page-head">
+    <div>
+        <p class="eyebrow">Inventario</p>
+        <h1>Consulta para ventas</h1>
+        <p class="page-subtitle">Productos disponibles para ofrecer a clientes.</p>
+    </div>
+</div>
+
+<form method="get" class="inventory-toolbar vendedores-filtros" data-filtros-vehiculos>
+    <div class="inventory-toolbar__fields">
+        <div class="filter-field filter-field--wide">
+            <label for="consulta-busqueda">Buscar</label>
+            <input id="consulta-busqueda" class="input-control" type="search" name="q" value="{{ busqueda }}" placeholder="Nombre, código, categoría, marca o modelo">
+        </div>
+        <div class="filter-field">
+            <label for="consulta-marca">Marca</label>
+            <select id="consulta-marca" class="input-control" name="marca" data-filtro-marca>
+                <option value="">Todas las marcas</option>
+                {% for marca in marcas %}<option value="{{ marca.pk }}"{% if marca_id == marca.pk|stringformat:'s' %} selected{% endif %}>{{ marca.nombre_marca }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="consulta-modelo">Modelo</label>
+            <select id="consulta-modelo" class="input-control" name="modelo" data-filtro-modelo>
+                <option value="">Todos los modelos</option>
+                {% for modelo in modelos %}<option value="{{ modelo.pk }}" data-marca="{{ modelo.marca_id }}"{% if modelo_id == modelo.pk|stringformat:'s' %} selected{% endif %}>{{ modelo.nombre_modelo }}</option>{% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="inventory-toolbar__actions">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+        <a href="{% url 'consulta_ventas' %}" class="btn">Limpiar</a>
+    </div>
+</form>
+
+<section class="vendedores-grid" aria-label="Productos disponibles">
+    {% for producto in productos %}
+    <article class="vendedor-card">
+        <div class="vendedor-card__head">
+            <div>
+                <p class="vendedor-card__categoria">{{ producto.categoria.nombre_categoria }}</p>
+                <h2>{{ producto.nombre }}</h2>
+            </div>
+            <span class="stock-badge">{{ producto.stock_disponible }} disponibles</span>
+        </div>
+        <dl class="vendedor-card__datos">
+            <div><dt>Código</dt><dd>{{ producto.codigo|default:'Sin código' }}</dd></div>
+            <div><dt>Precio de venta</dt><dd>{% if producto.precio_venta is not None %}{{ producto.precio_venta|clp }}{% else %}Sin precio{% endif %}</dd></div>
+        </dl>
+        <div class="vendedor-card__vehiculo">
+            <span>Vehículo compatible</span>
+            {% if producto.vehiculo %}
+            <strong>{{ producto.vehiculo.modelo.marca.nombre_marca }} {{ producto.vehiculo.modelo.nombre_modelo }}</strong>
+            <small>{{ producto.vehiculo.rango_anios }}{% if producto.vehiculo.tipo_vehiculo %} · {{ producto.vehiculo.tipo_vehiculo.nombre_tipo }}{% endif %}</small>
+            {% else %}<small class="inventory-muted">Sin vehículo informado</small>{% endif %}
+        </div>
+    </article>
+    {% empty %}
+    <div class="empty-state vendedores-grid__empty">No hay productos disponibles con estos filtros.</div>
+    {% endfor %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+    const formulario = document.querySelector('[data-filtros-vehiculos]');
+    if (!formulario) return;
+    const marca = formulario.querySelector('[data-filtro-marca]');
+    const modelo = formulario.querySelector('[data-filtro-modelo]');
+    const opciones = [...modelo.options].slice(1);
+    const modeloSeleccionado = modelo.value;
+
+    function actualizarModelos() {
+        const marcaSeleccionada = marca.value;
+        opciones.forEach((opcion) => {
+            opcion.hidden = Boolean(marcaSeleccionada) && opcion.dataset.marca !== marcaSeleccionada;
+        });
+        if (modelo.value && modelo.selectedOptions[0].hidden) modelo.value = '';
+    }
+
+    marca.addEventListener('change', () => {
+        actualizarModelos();
+        formulario.submit();
+    });
+    modelo.addEventListener('change', () => {
+        const opcion = modelo.selectedOptions[0];
+        if (opcion && opcion.dataset.marca) marca.value = opcion.dataset.marca;
+        formulario.submit();
+    });
+    actualizarModelos();
+    if (modeloSeleccionado) modelo.value = modeloSeleccionado;
+})();
+</script>
+{% endblock %}
