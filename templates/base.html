@@ -8,6 +8,7 @@
     <title>{% block title %}Desarmaduría{% endblock %}</title>
     <link rel="icon" href="{% static 'imagen/logo.webp' %}">
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <div class="app-shell">
@@ -43,6 +44,7 @@
                 Desarmaduría
             </a>
             <ul class="sidebar__nav">
+                {% if not request.user.rol_id or request.user.rol.nombre_rol|lower != 'bodega' %}
                 <li>
                     <a
                         href="{% url 'dashboard' %}"
@@ -58,9 +60,16 @@
                     </a>
                 </li>
                 <li>
+                    {% comment %}
+                        Existencias e Inventario valorizado se unificaron en
+                        una sola pantalla (mismo universo de productos, columnas
+                        complementarias), asi que este ya no es un submenu
+                        desplegable: es un enlace directo, como Dashboard o
+                        Ingresos.
+                    {% endcomment %}
                     <a
-                        href="{% url 'inventario' %}"
-                        class="nav-link{% if request.resolver_match.url_name == 'inventario' or request.resolver_match.url_name == 'ingresos' or request.resolver_match.url_name == 'ingreso_detalle' %} active{% endif %}"
+                        href="{% url 'inventario_visualizacion' %}"
+                        class="nav-link{% if request.resolver_match.url_name == 'inventario_visualizacion' %} active{% endif %}"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M21 8l-9-5-9 5 9 5 9-5z"></path>
@@ -69,7 +78,67 @@
                         </svg>
                         <span>Inventario</span>
                     </a>
+                    {% if request.user|tiene_permiso:"ventas:ver" %}
+                    <ul class="nav-submenu">
+                        <li><a href="{% url 'consulta_ventas' %}" class="nav-sublink{% if request.resolver_match.url_name == 'consulta_ventas' %} active{% endif %}">Consulta para ventas</a></li>
+                    </ul>
+                    {% endif %}
                 </li>
+                <li>
+                    {% with seccion_productos='productos_lista producto_crear producto_editar productos_edicion_masiva productos_importar' %}
+                    <details class="nav-group"{% if request.resolver_match.url_name in seccion_productos.split %} open{% endif %}>
+                        <summary
+                            class="nav-link nav-link--parent{% if request.resolver_match.url_name in seccion_productos.split %} active{% endif %}"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3.5 10.5 10.5 3.5h7l3 3v7l-7 7-10-10z"></path>
+                                <circle cx="8" cy="8" r="1.4"></circle>
+                            </svg>
+                            <span>Productos</span>
+                            <svg class="nav-link__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M6 9l6 6 6-6"></path>
+                            </svg>
+                        </summary>
+                        <ul class="nav-submenu">
+                            <li><a href="{% url 'productos_lista' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_lista' or request.resolver_match.url_name == 'producto_crear' or request.resolver_match.url_name == 'producto_editar' %} active{% endif %}">Listado</a></li>
+                            <li><a href="{% url 'productos_edicion_masiva' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_edicion_masiva' %} active{% endif %}">Edición masiva</a></li>
+                            <li><a href="{% url 'productos_importar' %}" class="nav-sublink{% if request.resolver_match.url_name == 'productos_importar' %} active{% endif %}">Importar desde Excel</a></li>
+                        </ul>
+                    </details>
+                    {% endwith %}
+                </li>
+                {% endif %}
+                {% if request.user|tiene_permiso:"ingresos:ver" %}
+                <li>
+                    <a
+                        href="{% url 'ingresos' %}"
+                        class="nav-link{% if request.resolver_match.url_name == 'ingresos' or request.resolver_match.url_name == 'ingreso_crear' or request.resolver_match.url_name == 'ingreso_detalle' or request.resolver_match.url_name == 'ingreso_editar' or request.resolver_match.url_name == 'ingreso_eliminar' %} active{% endif %}"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <path d="M7 10l5 5 5-5"></path>
+                            <path d="M12 15V3"></path>
+                        </svg>
+                        <span>Ingresos</span>
+                    </a>
+                </li>
+                {% endif %}
+                {% if not request.user.rol_id or request.user.rol.nombre_rol|lower != 'bodega' %}
+                {% if request.user|tiene_permiso:"ventas:ver" %}
+                <li>
+                    <a
+                        href="{% url 'ventas' %}"
+                        class="nav-link{% if request.resolver_match.url_name == 'ventas' or request.resolver_match.url_name == 'venta_crear' or request.resolver_match.url_name == 'venta_editar' %} active{% endif %}"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="9" cy="21" r="1"></circle>
+                            <circle cx="19" cy="21" r="1"></circle>
+                            <path d="M2.5 3h2l2.6 12.4a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L21 8H6"></path>
+                        </svg>
+                        <span>Ventas</span>
+                    </a>
+                </li>
+                {% endif %}
                 <li>
                     <a
                         href="{% url 'gastos' %}"
@@ -96,7 +165,7 @@
                         <span>Reportes</span>
                     </a>
                 </li>
-                {% if request.user|tiene_permiso:"usuarios:ver" or request.user|tiene_permiso:"roles:ver" or request.user|tiene_permiso:"formas_pago:ver" or request.user|tiene_permiso:"documentos:ver" %}
+                {% if request.user|tiene_permiso:"usuarios:ver" or request.user|tiene_permiso:"roles:ver" or request.user|tiene_permiso:"formas_pago:ver" or request.user|tiene_permiso:"documentos:ver" or request.user|tiene_permiso:"categorias:ver" %}
                 <li>
                     <a
                         href="{% url 'usuarios' %}"
@@ -111,6 +180,7 @@
                         <span>Usuarios</span>
                     </a>
                 </li>
+                {% endif %}
                 {% endif %}
             </ul>
         </nav>
@@ -161,5 +231,6 @@
     </div>
 
     <script src="{% static 'js/base.js' %}"></script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>
