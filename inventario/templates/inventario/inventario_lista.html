@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Existencias · Desarmaduría{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Inventario</h1>
+</div>
+
+{% include "inventario/_inventario_tabs.html" with seccion_activa=seccion_activa %}
+
+<form method="get" class="inv-filtros">
+    <input
+        type="text"
+        name="q"
+        value="{{ filtros.q }}"
+        placeholder="Buscar producto…"
+        class="input-control"
+    >
+    <select name="categoria" class="input-control">
+        <option value="">Todas las categorías</option>
+        {% for c in categorias %}
+        <option value="{{ c.pk }}"{% if filtros.categoria == c.pk|stringformat:"s" %} selected{% endif %}>{{ c.nombre_categoria }}</option>
+        {% endfor %}
+    </select>
+    <select name="vehiculo" class="input-control">
+        <option value="">Todos los vehículos</option>
+        {% for v in vehiculos %}
+        <option value="{{ v.pk }}"{% if filtros.vehiculo == v.pk|stringformat:"s" %} selected{% endif %}>{{ v.modelo }} ({{ v.anio }})</option>
+        {% endfor %}
+    </select>
+    <select name="stock" class="input-control">
+        <option value="">Todo el stock</option>
+        <option value="con"{% if filtros.stock == "con" %} selected{% endif %}>Con stock</option>
+        <option value="sin"{% if filtros.stock == "sin" %} selected{% endif %}>Sin stock</option>
+    </select>
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+    <a href="{% url 'inventario' %}" class="btn">Limpiar</a>
+</form>
+
+{% if productos %}
+<table>
+    <thead>
+        <tr>
+            <th>Producto</th>
+            <th>Categoría</th>
+            <th>Vehículo</th>
+            <th>Ingresos</th>
+            <th>Salidas</th>
+            <th>Stock</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for p in productos %}
+        <tr>
+            <td>{{ p.nombre }}</td>
+            <td>{{ p.categoria.nombre_categoria }}</td>
+            <td>{{ p.vehiculo.modelo }} ({{ p.vehiculo.anio }})</td>
+            <td>{{ p.total_entradas }}</td>
+            <td>{{ p.total_salidas }}</td>
+            <td>
+                <span class="badge {% if p.stock > 0 %}badge-success{% else %}badge-muted{% endif %}">
+                    {{ p.stock }}
+                </span>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">No hay productos que coincidan con el filtro.</div>
+{% endif %}
+{% endblock %}

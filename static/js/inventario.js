@@ -381,6 +381,251 @@
         });
     }
 
+    // Pantalla unica de Inventario (Existencias + Valorizado fusionados):
+    // filtro por categoria/marca/modelo, orden por columna y paginacion,
+    // todo instantaneo sobre las filas ya renderizadas. Va en su propio
+    // IIFE (no dentro del bloque de `.product-filtros` de abajo) para que
+    // corra igual en esta pagina, donde ese otro formulario no existe.
+    (function inicializarInventarioUnificado() {
+        var form = document.querySelector(".inventario-filtros");
+        if (!form) return;
+
+        var tabla = form.querySelector(".inventario-tabla");
+        var tbody = tabla.querySelector("tbody");
+        var countEl = form.querySelector(".table-count");
+        var encabezados = tabla.querySelectorAll("thead th");
+        var COLS = {};
+        Array.prototype.forEach.call(encabezados, function (th, indice) {
+            var nombre = th.getAttribute("data-col");
+            if (nombre) COLS[nombre] = indice;
+        });
+        var TOTAL_COLUMNAS = encabezados.length || 8;
+
+        // Los valores crudos (ids de categoria/marca/modelo, cantidades y el
+        // valor en stock) viajan aparte via json_script: el texto de las
+        // celdas ya esta formateado ($ con puntos de miles) y parsearlo de
+        // vuelta es fragil (ver nota de "costo" mas abajo, en el bloque de
+        // Productos).
+        var datosEl = document.getElementById("inventario-datos");
+        var datosPorId = {};
+        if (datosEl) {
+            JSON.parse(datosEl.textContent).forEach(function (item) {
+                datosPorId[item.id] = item;
+            });
+        }
+
+        var selects = {
+            categoria: form.querySelector('select[name="categoria"]'),
+            marca: form.querySelector('select[name="marca"]'),
+            modelo: form.querySelector('select[name="modelo"]')
+        };
+
+        var filas = Array.prototype.filter.call(tbody.querySelectorAll("tr"), function (tr) {
+            return tr.hasAttribute("data-id");
+        });
+        if (!filas.length) return;
+
+        var DIACRITICOS_INV = new RegExp("[\\u0300-\\u036f]", "g");
+        function normalizarInv(texto) {
+            return (texto || "").toLowerCase().normalize("NFD").replace(DIACRITICOS_INV, "").trim();
+        }
+        function textoCeldaInv(tr, indice) {
+            var celda = tr.children[indice];
+            return celda ? celda.textContent : "";
+        }
+
+        filas.forEach(function (tr) {
+            tr._datos = datosPorId[tr.getAttribute("data-id")] || {};
+            tr._buscar = {
+                nombre: normalizarInv(textoCeldaInv(tr, COLS.nombre)),
+                categoria: normalizarInv(textoCeldaInv(tr, COLS.categoria))
+            };
+        });
+
+        var filaVacia = null;
+        function actualizarVacia(cantidadVisible) {
+            if (cantidadVisible > 0) {
+                if (filaVacia) filaVacia.hidden = true;
+                return;
+            }
+            if (!filaVacia) {
+                filaVacia = document.createElement("tr");
+                filaVacia.innerHTML =
+                    '<td colspan="' + TOTAL_COLUMNAS + '" class="empty-state">Ningún producto coincide con los filtros.</td>';
+                tbody.appendChild(filaVacia);
+            }
+            filaVacia.hidden = false;
+        }
+
+        var tarjetas = {
+            disponibles: document.querySelector('[data-metric="disponibles"]'),
+            con_stock: document.querySelector('[data-metric="con_stock"]'),
+            vendidas: document.querySelector('[data-metric="vendidas"]'),
+            valor: document.querySelector('[data-metric="valor"]')
+        };
+
+        function actualizarTarjetas(visibles) {
+            var disponibles = 0, conStock = 0, vendidas = 0, valor = 0;
+            visibles.forEach(function (tr) {
+                var d = tr._datos;
+                disponibles += d.disponible || 0;
+                if ((d.disponible || 0) > 0) conStock += 1;
+                vendidas += d.vendidas || 0;
+                valor += parseFloat(d.valor) || 0;
+            });
+            if (tarjetas.disponibles) tarjetas.disponibles.textContent = String(disponibles);
+            if (tarjetas.con_stock) tarjetas.con_stock.textContent = String(conStock);
+            if (tarjetas.vendidas) tarjetas.vendidas.textContent = String(vendidas);
+            if (tarjetas.valor) tarjetas.valor.textContent = formatearCLP(valor);
+        }
+
+        var pager = form.querySelector("[data-pager]");
+        var pagerTam = form.querySelector("[data-pager-tamano]");
+        var pagerInfo = form.querySelector("[data-pager-info]");
+        var pagerAnterior = form.querySelector("[data-pager-anterior]");
+        var pagerSiguiente = form.querySelector("[data-pager-siguiente]");
+        var paginaActual = 1;
+
+        function aplicarPaginacion(visibles) {
+            if (!pager) return;
+            pager.hidden = visibles.length === 0;
+            var tam = pagerTam ? (parseInt(pagerTam.value, 10) || 10) : 10;
+            var totalPaginas = Math.max(1, Math.ceil(visibles.length / tam));
+            if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+            if (paginaActual < 1) paginaActual = 1;
+            var inicio = (paginaActual - 1) * tam;
+            visibles.forEach(function (tr, indice) {
+                tr.hidden = indice < inicio || indice >= inicio + tam;
+            });
+            if (pagerInfo) pagerInfo.textContent = "Página " + paginaActual + " de " + totalPaginas;
+            if (pagerAnterior) pagerAnterior.disabled = paginaActual <= 1;
+            if (pagerSiguiente) pagerSiguiente.disabled = paginaActual >= totalPaginas;
+        }
+
+        function actualizarVista() {
+            var visibles = [];
+            filas.forEach(function (tr) {
+                tr.hidden = !tr._coincide;
+                if (tr._coincide) visibles.push(tr);
+            });
+            if (countEl) {
+                countEl.textContent = visibles.length + (visibles.length === 1 ? " producto" : " productos");
+            }
+            actualizarTarjetas(visibles);
+            aplicarPaginacion(visibles);
+            actualizarVacia(visibles.length);
+        }
+
+        function aplicarFiltro() {
+            var catSel = selects.categoria ? selects.categoria.value : "";
+            var marcaSel = selects.marca ? selects.marca.value : "";
+            var modeloSel = selects.modelo ? selects.modelo.value : "";
+            filas.forEach(function (tr) {
+                var d = tr._datos;
+                var ok = true;
+                if (catSel && String(d.categoria) !== catSel) ok = false;
+                if (ok && marcaSel && String(d.marca) !== marcaSel) ok = false;
+                if (ok && modeloSel && String(d.modelo) !== modeloSel) ok = false;
+                tr._coincide = ok;
+            });
+            paginaActual = 1;
+            actualizarVista();
+        }
+
+        var ordenActual = { campo: "nombre", dir: 1 };
+
+        function valorOrdenInv(tr, campo) {
+            if (campo === "disponible") return tr._datos.disponible || 0;
+            if (campo === "valor") return parseFloat(tr._datos.valor) || 0;
+            if (campo === "categoria") return tr._buscar.categoria;
+            return tr._buscar.nombre;
+        }
+
+        function ordenar(campo, dir) {
+            ordenActual = { campo: campo, dir: dir };
+            var numerico = campo === "disponible" || campo === "valor";
+            filas.sort(function (a, b) {
+                var av = valorOrdenInv(a, campo);
+                var bv = valorOrdenInv(b, campo);
+                var r = numerico ? av - bv : av < bv ? -1 : av > bv ? 1 : 0;
+                if (r === 0) {
+                    r = a._buscar.nombre < b._buscar.nombre ? -1 : a._buscar.nombre > b._buscar.nombre ? 1 : 0;
+                }
+                return r * dir;
+            });
+            var frag = document.createDocumentFragment();
+            filas.forEach(function (tr) { frag.appendChild(tr); });
+            tbody.appendChild(frag);
+            if (filaVacia) tbody.appendChild(filaVacia);
+            marcarBotones();
+            paginaActual = 1;
+            actualizarVista();
+        }
+
+        function marcarBotones() {
+            form.querySelectorAll("[data-orden]").forEach(function (btn) {
+                var valor = btn.getAttribute("data-orden");
+                var dir = valor.charAt(0) === "-" ? -1 : 1;
+                var campo = valor.replace("-", "");
+                btn.classList.toggle("is-active", campo === ordenActual.campo && dir === ordenActual.dir);
+            });
+        }
+
+        var activoInicial = form.querySelector("[data-orden].is-active");
+        if (activoInicial) {
+            var v = activoInicial.getAttribute("data-orden");
+            ordenActual = { campo: v.replace("-", ""), dir: v.charAt(0) === "-" ? -1 : 1 };
+        }
+
+        Object.keys(selects).forEach(function (clave) {
+            if (selects[clave]) selects[clave].addEventListener("change", aplicarFiltro);
+        });
+
+        form.addEventListener("submit", function (event) {
+            event.preventDefault();
+        });
+
+        form.querySelectorAll("[data-orden]").forEach(function (btn) {
+            btn.addEventListener("click", function (event) {
+                event.preventDefault();
+                var valor = btn.getAttribute("data-orden");
+                ordenar(valor.replace("-", ""), valor.charAt(0) === "-" ? -1 : 1);
+            });
+        });
+
+        var limpiar = form.querySelector("[data-limpiar]");
+        if (limpiar) {
+            limpiar.addEventListener("click", function (event) {
+                event.preventDefault();
+                Object.keys(selects).forEach(function (clave) {
+                    if (selects[clave]) selects[clave].value = "";
+                });
+                aplicarFiltro();
+            });
+        }
+
+        if (pagerTam) {
+            pagerTam.addEventListener("change", function () {
+                paginaActual = 1;
+                actualizarVista();
+            });
+        }
+        if (pagerAnterior) {
+            pagerAnterior.addEventListener("click", function () {
+                paginaActual -= 1;
+                actualizarVista();
+            });
+        }
+        if (pagerSiguiente) {
+            pagerSiguiente.addEventListener("click", function () {
+                paginaActual += 1;
+                actualizarVista();
+            });
+        }
+
+        aplicarFiltro();
+    })();
+
     var form = document.querySelector(".product-filtros");
     if (!form) return;
 

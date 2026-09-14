@@ -126,6 +126,27 @@
 .value-cell { font-weight: 700; color: var(--color-primary-dark); }
 .inventory-muted { color: var(--color-text-muted); font-style: italic; }
 .table-actions-cell { white-space: nowrap; }
+
+.table-panel__pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.85rem;
+}
+
+.table-panel__pager-tam,
+.table-panel__pager-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.table-panel__pager-tam select { min-height: 34px; padding: 4px 8px; }
+.table-panel__pager-nav .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .inventory-form-card { max-width: 680px; }
 .inventory-form-card h1 { margin-bottom: 20px; }
 
@@ -221,10 +242,55 @@
     min-height: 60px;
 }
 
+.vendedores-filtros .inventory-toolbar__fields {
+    grid-template-columns: minmax(240px, 2fr) repeat(2, minmax(160px, 1fr));
+}
+
+.filter-field--wide { min-width: 0; }
+
+.vendedores-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.vendedor-card {
+    display: flex;
+    min-height: 250px;
+    flex-direction: column;
+    gap: 16px;
+    padding: 18px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+}
+
+.vendedor-card__head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.vendedor-card__head h2 { margin: 2px 0 0; font-size: 1.05rem; }
+.vendedor-card__categoria { margin: 0; color: var(--color-primary); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+.vendedor-card .stock-badge { flex-shrink: 0; font-size: 0.78rem; }
+.vendedor-card__datos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; }
+.vendedor-card__datos div { min-width: 0; }
+.vendedor-card__datos dt, .vendedor-card__vehiculo > span { color: var(--color-text-muted); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+.vendedor-card__datos dd { margin: 3px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.vendedor-card__vehiculo { display: flex; flex: 1; flex-direction: column; justify-content: end; gap: 3px; padding-top: 14px; border-top: 1px solid var(--color-border); }
+.vendedor-card__vehiculo strong { font-size: 0.95rem; }
+.vendedor-card__vehiculo small { color: var(--color-text-muted); }
+.vendedores-grid__empty { grid-column: 1 / -1; }
+
 @media (max-width: 720px) {
     .inventory-toolbar__fields--busqueda {
         grid-template-columns: 1fr;
     }
+
+    .vendedores-filtros .inventory-toolbar__fields { grid-template-columns: 1fr; }
 }
 /* Edicion masiva de productos */
 .carga-card {

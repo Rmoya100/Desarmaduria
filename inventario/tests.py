@@ -616,12 +616,11 @@ class SidebarSubmenuTests(TestCase):
         self.assertIn("<summary", html)
         # La clase antigua ya no debe decidir la visibilidad del submenu.
         self.assertNotIn("nav-group--active", html)
-        # El sidebar tiene dos grupos desplegables: Inventario (Existencias,
-        # Inventario valorizado) y Productos (Listado, Edicion masiva,
-        # Importar). Si un comentario `{# #}` quedara abierto apareceria un
-        # <details> de mas o de menos.
-        self.assertEqual(html.count("<details"), 2)
-        self.assertEqual(html.count('class="nav-sublink'), 5)
+        # El sidebar tiene un solo grupo desplegable: Productos. Inventario
+        # incluye ahora el acceso de consulta para ventas. Si un comentario
+        # `{# #}` quedara abierto apareceria un <details> de mas o de menos.
+        self.assertEqual(html.count("<details"), 1)
+        self.assertEqual(html.count('class="nav-sublink'), 4)
 
     def test_las_plantillas_no_emiten_comentarios_literales(self):
         """`{# ... #}` solo comenta una linea. Si se abre y no se cierra en la
@@ -632,9 +631,12 @@ class SidebarSubmenuTests(TestCase):
                 self.assertNotIn("{#", html)
                 self.assertNotIn("{%", html)
 
-    def test_abierto_solo_dentro_de_inventario(self):
+    def test_abierto_solo_dentro_de_productos(self):
+        """Inventario ya no es un `<details>` (ver test de arriba): el unico
+        grupo desplegable que queda es Productos, y solo debe abrirse solo
+        al entrar a una de sus pantallas."""
         fuera = self._details(self.client.get(reverse("dashboard")))
-        dentro = self._details(self.client.get(reverse("inventario_visualizacion")))
+        dentro = self._details(self.client.get(reverse("productos_lista")))
         self.assertNotIn("open", fuera)
         self.assertIn("open", dentro)
 
@@ -776,10 +778,11 @@ class ProductoGaleriaTests(TestCase):
 
 
 class InventarioExistenciasTests(TestCase):
-    """`inventario_visualizacion` (Existencias) e `inventario_valorizado`
-    (Inventario valorizado) son, por definicion, lo que hay disponible para
-    vender: ninguna de las dos debe listar productos agotados ni ofrecer un
-    filtro de "Estado" que ya no tendria efecto."""
+    """`inventario_visualizacion` es la pantalla unica de Inventario (fusion
+    de las antiguas "Existencias" e "Inventario valorizado"): por
+    definicion, lo que hay disponible para vender, asi que no debe listar
+    productos agotados ni ofrecer un filtro de "Estado" que ya no tendria
+    efecto."""
 
     def setUp(self):
         self.usuario = crear_usuario("existencias")
@@ -793,7 +796,7 @@ class InventarioExistenciasTests(TestCase):
         agotado = Producto.objects.create(categoria=categoria, nombre="Agotado", costo=Decimal("500"))
         return con_stock, agotado
 
-    def test_existencias_no_muestra_productos_agotados(self):
+    def test_inventario_no_muestra_productos_agotados(self):
         con_stock, agotado = self._crear_con_y_sin_stock()
         respuesta = self.client.get(reverse("inventario_visualizacion"))
         self.assertEqual(respuesta.status_code, 200)
@@ -801,34 +804,27 @@ class InventarioExistenciasTests(TestCase):
         self.assertIn(con_stock.pk, ids)
         self.assertNotIn(agotado.pk, ids)
 
-    def test_existencias_no_ofrece_el_filtro_de_estado(self):
+    def test_inventario_no_ofrece_el_filtro_de_estado(self):
         respuesta = self.client.get(reverse("inventario_visualizacion"))
         self.assertEqual(respuesta.status_code, 200)
         self.assertNotIn("id_estado", respuesta.content.decode())
 
-    def test_inventario_valorizado_no_muestra_productos_agotados(self):
-        con_stock, agotado = self._crear_con_y_sin_stock()
+    def test_url_valorizado_antigua_redirige_a_inventario(self):
+        """La pantalla "Inventario valorizado" se fusiono con Existencias;
+        esta URL se mantiene solo para no romper enlaces guardados."""
         respuesta = self.client.get(reverse("inventario_valorizado"))
-        self.assertEqual(respuesta.status_code, 200)
-        ids = {p.pk for p in respuesta.context["productos"]}
-        self.assertIn(con_stock.pk, ids)
-        self.assertNotIn(agotado.pk, ids)
+        self.assertRedirects(respuesta, reverse("inventario_visualizacion"))
 
-    def test_inventario_valorizado_no_ofrece_el_filtro_de_estado(self):
-        respuesta = self.client.get(reverse("inventario_valorizado"))
-        self.assertEqual(respuesta.status_code, 200)
-        self.assertNotIn("id_estado", respuesta.content.decode())
-
-    def test_costo_unitario_usa_el_precio_de_venta_estimado_no_el_costo(self):
+    def test_valor_en_stock_usa_el_precio_de_venta_estimado_no_el_costo(self):
         """En piezas usadas no se lleva costo de adquisicion por unidad: el
-        "costo unitario" de este reporte es el precio de venta estimado
+        valor en stock de este reporte es el precio de venta estimado
         (Producto.precio_venta), no Producto.costo."""
         producto = crear_producto_con_stock(cantidad=4, usuario=self.usuario, nombre="Con precio estimado")
         self.assertEqual(producto.costo, Decimal("1000"))
         producto.precio_venta = Decimal("2500")
         producto.save(update_fields=["precio_venta"])
 
-        respuesta = self.client.get(reverse("inventario_valorizado"))
+        respuesta = self.client.get(reverse("inventario_visualizacion"))
         self.assertEqual(respuesta.status_code, 200)
 
         producto_en_contexto = next(
@@ -1029,3 +1025,86 @@ class IngresoPrecioVentaTests(TestCase):
         respuesta = self.client.get(reverse("ingreso_detalle", args=[entrada_pk]))
         self.assertEqual(respuesta.status_code, 200)
         self.assertIn("$12.345", respuesta.content.decode())
+
+
+class ConsultaVendedoresTests(TestCase):
+    def setUp(self):
+        self.rol = Rol.objects.get(nombre_rol="Administrador")
+        self.usuario = crear_usuario("consulta-vendedor", rol=self.rol)
+        self.client.force_login(self.usuario)
+        self.categoria = Categoria.objects.create(nombre_categoria="Frenos")
+        self.marca = Marca.objects.create(nombre_marca="Toyota")
+        self.modelo = Modelo.objects.create(marca=self.marca, nombre_modelo="Yaris")
+        self.otro_marca = Marca.objects.create(nombre_marca="Honda")
+        self.otro_modelo = Modelo.objects.create(marca=self.otro_marca, nombre_modelo="Civic")
+        self.vehiculo = Vehiculo.objects.create(
+            modelo=self.modelo, anio_desde=2014, anio_hasta=2018,
+        )
+        self.producto = Producto.objects.create(
+            codigo="PAST-01", categoria=self.categoria, nombre="Pastillas delanteras",
+            vehiculo=self.vehiculo, precio_venta=Decimal("25000"), costo=Decimal("1000"),
+        )
+        categoria_agotado = Categoria.objects.create(nombre_categoria="Agotados")
+        Producto.objects.create(categoria=categoria_agotado, nombre="Agotado")
+        entrada = Entrada.objects.create(fecha="2026-01-01", usuario=self.usuario)
+        DetalleEntrada.objects.create(entrada=entrada, producto=self.producto, cantidad=3)
+
+    def test_muestra_solo_stock_y_datos_de_vehiculo(self):
+        respuesta = self.client.get(reverse("consulta_ventas"))
+        self.assertEqual(respuesta.status_code, 200)
+        productos = list(respuesta.context["productos"])
+        self.assertEqual([producto.pk for producto in productos], [self.producto.pk])
+        contenido = respuesta.content.decode()
+        self.assertIn("PAST-01", contenido)
+        self.assertIn("TOYOTA YARIS", contenido)
+        self.assertIn("2014-2018", contenido)
+
+    def test_busqueda_considera_codigo_marca_y_modelo(self):
+        for termino in ("PAST-01", "TOYOTA", "YARIS", "FRENOS"):
+            respuesta = self.client.get(reverse("consulta_ventas"), {"q": termino})
+            self.assertEqual(respuesta.context["productos"].count(), 1, termino)
+
+    def test_filtros_cruzados_restringen_modelos_y_sincronizan_marca(self):
+        respuesta = self.client.get(reverse("consulta_ventas"), {"marca": self.marca.pk})
+        self.assertEqual(list(respuesta.context["modelos"]), [self.modelo])
+
+        respuesta = self.client.get(reverse("consulta_ventas"), {"modelo": self.modelo.pk})
+        self.assertEqual(respuesta.context["marca_id"], str(self.marca.pk))
+        self.assertEqual(respuesta.context["modelos"].count(), 1)
+
+    def test_usuario_sin_ventas_ver_recibe_403_y_superusuario_puede_ver(self):
+        sin_permiso = Rol.objects.create(nombre_rol="Sin consulta")
+        usuario = crear_usuario("sin-consulta", rol=sin_permiso)
+        self.client.force_login(usuario)
+        self.assertEqual(self.client.get(reverse("consulta_ventas")).status_code, 403)
+
+        usuario.is_superuser = True
+        usuario.save(update_fields=["is_superuser"])
+        self.assertEqual(self.client.get(reverse("consulta_ventas")).status_code, 200)
+
+
+class BodegaAccessTests(TestCase):
+    def setUp(self):
+        self.rol = Rol.objects.get(nombre_rol="Bodega")
+        self.usuario = crear_usuario("bodega-test", rol=self.rol)
+        self.client.force_login(self.usuario)
+
+    def test_rol_tiene_solo_permisos_de_ver_y_crear_ingresos(self):
+        permisos = set(self.rol.rol_permisos.values_list("permiso__modulo", "permiso__nombre_permiso"))
+        self.assertEqual(permisos, {("ingresos", "ver"), ("ingresos", "crear")})
+
+    def test_bodega_es_redirigida_a_ingresos_y_no_ve_otro_menu(self):
+        respuesta = self.client.get(reverse("dashboard"))
+        self.assertRedirects(respuesta, reverse("ingresos"))
+        respuesta = self.client.get(reverse("ingresos"))
+        self.assertEqual(respuesta.status_code, 200)
+        contenido = respuesta.content.decode()
+        self.assertIn("Ingresos", contenido)
+        self.assertNotIn("Dashboard", contenido)
+        self.assertNotIn("Consulta para ventas", contenido)
+
+    def test_bodega_recibe_403_en_otros_modulos(self):
+        self.assertEqual(self.client.get(reverse("ventas")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("gastos")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("reportes")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("productos_lista")).status_code, 403)
