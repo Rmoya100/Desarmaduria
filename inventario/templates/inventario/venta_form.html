@@ -99,15 +99,24 @@
         </div>
         <p class="form-error" id="error-nueva-linea" hidden></p>
 
+        <div class="table-scroll">
         <table class="detalle-ventas" data-formset data-formset-prefix="{{ formset.prefix }}">
+            <colgroup>
+                <col class="detalle-col-producto">
+                <col class="detalle-col-cantidad">
+                <col class="detalle-col-precio-estimado">
+                <col class="detalle-col-precio">
+                <col class="detalle-col-subtotal">
+                <col class="detalle-col-accion">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Producto</th>
-                    <th>Cantidad</th>
-                    <th>Precio estimado</th>
-                    <th>Precio</th>
-                    <th>Subtotal</th>
-                    <th>Acción</th>
+                    <th class="detalle-col-cantidad">Cantidad</th>
+                    <th class="detalle-col-precio-estimado">Precio estimado</th>
+                    <th class="detalle-col-precio">Precio</th>
+                    <th class="detalle-col-subtotal">Subtotal</th>
+                    <th class="detalle-col-accion">Acción</th>
                 </tr>
             </thead>
             <tbody data-formset-body>
@@ -122,7 +131,7 @@
                     <td class="detalle-precio-estimado-valor">{% if detalle_form.instance.pk %}{% if detalle_form.instance.precio_estimado %}{{ detalle_form.instance.precio_estimado|clp }}{% else %}—{% endif %}{% endif %}</td>
                     <td class="detalle-precio-valor">{% if detalle_form.instance.pk %}{{ detalle_form.instance.precio|clp }}{% endif %}</td>
                     <td class="detalle-subtotal"></td>
-                    <td>
+                    <td class="detalle-col-accion">
                         <span hidden>{{ detalle_form.DELETE }}</span>
                         <button type="button" class="btn btn-danger btn-sm" data-formset-remove>Quitar</button>
                     </td>
@@ -140,6 +149,7 @@
                 </tr>
             </tfoot>
         </table>
+        </div>
 
         <div class="venta-iva-resumen" id="resumen-iva" hidden>
             <span>Neto: <strong id="resumen-neto-valor">$0</strong></span>
@@ -158,7 +168,7 @@
                 <td class="detalle-precio-estimado-valor"></td>
                 <td class="detalle-precio-valor"></td>
                 <td class="detalle-subtotal"></td>
-                <td>
+                <td class="detalle-col-accion">
                     <span hidden>{{ formset.empty_form.DELETE }}</span>
                     <button type="button" class="btn btn-danger btn-sm" data-formset-remove>Quitar</button>
                 </td>
