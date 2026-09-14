@@ -862,7 +862,12 @@ tfoot td {
    barra de agregar producto (buscador + cantidad + precio) que abre el
    modal "Buscar Producto" para elegir de todo el catalogo con su stock.
 --------------------------------------------------------------------- */
-.form-card--ancho {
+/* Selector compuesto (no solo `.form-card--ancho`): mas abajo en este mismo
+   archivo hay un `.form-card { max-width: 560px; }` (linea ~1504, para las
+   tarjetas simples tipo Gastos/Usuarios) con la misma especificidad; sin el
+   `.form-card` aca adelante, el orden de cascada lo hacia ganar y esta
+   tarjeta quedaba fija en 560px sin importar el ancho de pantalla. */
+.form-card.form-card--ancho {
     max-width: 100%;
     padding: var(--spacing-4) calc(var(--spacing-4) * 1.3);
 }
@@ -950,6 +955,67 @@ tfoot td {
 
 .detalle-ventas .empty-state {
     text-align: center;
+}
+
+/* Layout fijo (via <colgroup>) en vez de dejar que el navegador reparta el
+   ancho segun contenido: sin esto, "Producto" (el texto mas largo, nombre +
+   vehiculo) terminaba con el mismo ancho que columnas cortas como "Precio",
+   partiendose en 5-6 lineas aunque la tarjeta tuviera espacio de sobra. */
+.detalle-ventas {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.detalle-col-producto {
+    width: 34%;
+}
+
+.detalle-col-cantidad {
+    width: 10%;
+}
+
+.detalle-col-precio-estimado {
+    width: 15%;
+}
+
+.detalle-col-precio {
+    width: 13%;
+}
+
+.detalle-col-subtotal {
+    width: 15%;
+}
+
+.detalle-col-accion {
+    width: 13%;
+}
+
+.detalle-col-cantidad,
+.detalle-cantidad-valor,
+.detalle-col-accion {
+    text-align: center;
+}
+
+.detalle-col-precio-estimado,
+.detalle-precio-estimado-valor,
+.detalle-col-precio,
+.detalle-precio-valor,
+.detalle-col-subtotal,
+.detalle-subtotal {
+    text-align: right;
+}
+
+.detalle-cantidad-valor,
+.detalle-precio-estimado-valor,
+.detalle-precio-valor,
+.detalle-subtotal,
+.detalle-col-accion {
+    white-space: nowrap;
+}
+
+.detalle-producto-nombre {
+    white-space: normal;
+    word-break: break-word;
 }
 
 .detalle-toolbar {
@@ -1475,7 +1541,10 @@ tfoot td {
     min-width: 160px;
 }
 
-.form-card--wide {
+/* Mismo motivo del comentario en `.form-card.form-card--ancho`: selector
+   compuesto para ganarle en especificidad al `.form-card` duplicado de mas
+   abajo, si no esta tarjeta (Ingresos) tambien queda fija en 560px. */
+.form-card.form-card--wide {
     max-width: 760px;
 }
 
