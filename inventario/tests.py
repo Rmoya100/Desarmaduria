@@ -1118,3 +1118,45 @@ class BodegaAccessTests(TestCase):
         self.assertEqual(self.client.get(reverse("gastos")).status_code, 403)
         self.assertEqual(self.client.get(reverse("reportes")).status_code, 403)
         self.assertEqual(self.client.get(reverse("productos_lista")).status_code, 403)
+
+
+class VendedorAccessTests(TestCase):
+    def setUp(self):
+        self.rol = Rol.objects.get(nombre_rol="Vendedor")
+        self.usuario = crear_usuario("vendedor-test", rol=self.rol)
+        self.client.force_login(self.usuario)
+
+    def test_rol_tiene_solo_permisos_de_ver_productos_y_consultar_ventas(self):
+        permisos = set(self.rol.rol_permisos.values_list("permiso__modulo", "permiso__nombre_permiso"))
+        self.assertEqual(permisos, {("productos", "ver"), ("ventas", "consultar")})
+
+    def test_vendedor_es_redirigida_a_inventario_y_ve_solo_lectura(self):
+        respuesta = self.client.get(reverse("dashboard"))
+        self.assertRedirects(respuesta, reverse("inventario_visualizacion"))
+        respuesta = self.client.get(reverse("inventario_visualizacion"))
+        self.assertEqual(respuesta.status_code, 200)
+        respuesta = self.client.get(reverse("productos_lista"))
+        self.assertEqual(respuesta.status_code, 200)
+        contenido = respuesta.content.decode()
+        self.assertNotIn("Nuevo producto", contenido)
+        self.assertNotIn("Edición masiva", contenido)
+
+    def test_vendedor_no_puede_crear_editar_ni_eliminar_productos(self):
+        producto = Producto.objects.create(nombre="Pieza", categoria=Categoria.objects.create(nombre_categoria="Cat"))
+        self.assertEqual(self.client.post(reverse("producto_crear")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("producto_editar", args=[producto.pk])).status_code, 403)
+        self.assertEqual(
+            self.client.post(reverse("producto_eliminar", args=[producto.pk]), {"confirmar_eliminacion": "1"}).status_code,
+            403,
+        )
+
+    def test_vendedor_recibe_403_en_otros_modulos(self):
+        self.assertEqual(self.client.get(reverse("ventas")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("gastos")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("reportes")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("ingresos")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("usuarios")).status_code, 403)
+
+    def test_vendedor_puede_consultar_catalogo_de_ventas_sin_ver_el_modulo_completo(self):
+        self.assertEqual(self.client.get(reverse("consulta_ventas")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("ventas")).status_code, 403)
