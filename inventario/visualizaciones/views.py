@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import DecimalField, ExpressionWrapper, F, Prefetch, Q, Sum, Value
@@ -29,7 +28,7 @@ ORDENES_VALIDOS = ("nombre", "-nombre", "categoria", "-categoria", "costo", "-co
 SESION_IMPORTACION = "importacion_catalogo"
 
 
-@permiso_requerido("ventas", "ver")
+@permiso_requerido("ventas", "consultar")
 def consulta_ventas(request):
     """Catalogo disponible para vendedores, sin operaciones de inventario."""
     productos = productos_con_stock().filter(stock_disponible__gt=0).select_related(
@@ -160,7 +159,7 @@ ORDENES_INVENTARIO = {
 }
 
 
-@login_required
+@permiso_requerido("productos", "ver")
 def inventario_visualizacion(request):
     """Pantalla unica de inventario (fusion de las antiguas "Existencias" y
     "Inventario valorizado": mostraban el mismo universo de productos con
@@ -223,7 +222,7 @@ def inventario_visualizacion(request):
     return render(request, "inventario/visualizaciones/inventario.html", contexto)
 
 
-@login_required
+@permiso_requerido("productos", "ver")
 def productos_lista(request):
     filtro, productos, orden_actual = _filtrar_lista_productos(request)
     return render(
@@ -235,6 +234,9 @@ def productos_lista(request):
             "orden_actual": orden_actual,
             "form": ProductoForm(),
             "puede_importar": tiene_permiso(request.user, "productos", "importar"),
+            "puede_crear": tiene_permiso(request.user, "productos", "crear"),
+            "puede_editar": tiene_permiso(request.user, "productos", "editar"),
+            "puede_eliminar": tiene_permiso(request.user, "productos", "eliminar"),
         },
     )
 
@@ -247,7 +249,7 @@ def _guardar_fotos_nuevas(form, producto, usuario):
         ProductoFoto.objects.create(producto=producto, imagen=archivo, creado_por=usuario)
 
 
-@login_required
+@permiso_requerido("productos", "crear")
 def producto_crear(request):
     if request.method != "POST":
         return redirect("productos_lista")
@@ -272,7 +274,7 @@ def producto_crear(request):
     )
 
 
-@login_required
+@permiso_requerido("productos", "editar")
 def producto_editar(request, pk):
     producto = get_object_or_404(Producto, pk=pk)
     form = ProductoForm(
@@ -289,7 +291,7 @@ def producto_editar(request, pk):
     return render(request, plantilla, {"form": form, "producto": producto})
 
 
-@login_required
+@permiso_requerido("productos", "editar")
 def producto_foto_eliminar(request, pk, id_foto):
     if request.method != "POST":
         return redirect("producto_editar", pk=pk)
@@ -299,7 +301,7 @@ def producto_foto_eliminar(request, pk, id_foto):
     return redirect("producto_editar", pk=pk)
 
 
-@login_required
+@permiso_requerido("productos", "editar")
 def producto_foto_principal(request, pk, id_foto):
     if request.method != "POST":
         return redirect("producto_editar", pk=pk)
@@ -310,7 +312,7 @@ def producto_foto_principal(request, pk, id_foto):
     return redirect("producto_editar", pk=pk)
 
 
-@login_required
+@permiso_requerido("productos", "editar")
 def producto_foto_mover(request, pk, id_foto):
     if request.method != "POST":
         return redirect("producto_editar", pk=pk)
@@ -382,7 +384,7 @@ def productos_importar(request):
     )
 
 
-@login_required
+@permiso_requerido("productos", "eliminar")
 def producto_eliminar(request, pk):
     if request.method != "POST":
         return redirect("productos_lista")
@@ -413,7 +415,7 @@ CABECERAS_EXPORT = [
 ]
 
 
-@login_required
+@permiso_requerido("productos", "ver")
 def productos_exportar_excel(request):
     _filtro, productos, _orden = _filtrar_lista_productos(request)
     stock_por_producto = {
@@ -501,7 +503,7 @@ def productos_exportar_excel(request):
     return response
 
 
-@login_required
+@permiso_requerido("productos", "editar")
 def productos_edicion_masiva(request):
     accion = request.POST.get("accion") if request.method == "POST" else None
     form = EdicionMasivaForm(
