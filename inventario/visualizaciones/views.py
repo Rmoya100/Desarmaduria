@@ -170,15 +170,24 @@ def inventario_visualizacion(request):
     no `Producto.costo`: en piezas usadas no se lleva un costo de
     adquisicion por unidad (se compra el vehiculo completo, no cada pieza
     por separado), asi que el valor de referencia del inventario es cuanto
-    se estima poder venderlo. El KPI "Valor del inventario" del Dashboard
-    sigue usando `Producto.costo` (`servicios.inventario.valor_inventario`)
-    sin cambios; es una metrica distinta, con otro proposito.
+    se estima poder venderlo. El KPI "Valor inventario" del Dashboard usa el
+    mismo criterio (`servicios.inventario.valor_inventario`).
     """
     form, productos = _productos_filtrados(request, forzar_con_stock=True)
     productos = productos.annotate(
         valor_stock=ExpressionWrapper(
             Coalesce(F("precio_venta"), Value(Decimal("0"))) * F("stock_disponible"),
             output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+    ).prefetch_related(
+        # La tabla muestra la miniatura de cada pieza; sin esto `foto_principal`
+        # dispara una consulta por fila. Va aqui y no en `productos_con_stock()`
+        # porque esa la comparten el Dashboard y Consulta para ventas, que no
+        # muestran fotos.
+        Prefetch(
+            "fotos",
+            queryset=ProductoFoto.objects.filter(es_principal=True),
+            to_attr="_fotos_principales_prefetch",
         )
     )
     orden_actual = request.GET.get("orden", "nombre")

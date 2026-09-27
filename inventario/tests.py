@@ -4,7 +4,9 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -843,6 +845,45 @@ class InventarioExistenciasTests(TestCase):
         self.assertEqual(producto_en_contexto.valor_stock, Decimal("2500") * 4)
         self.assertEqual(respuesta.context["valor_inventario"], Decimal("2500") * 4)
         self.assertIn("$2.500", respuesta.content.decode())
+
+    def test_inventario_muestra_la_foto_principal_y_no_entradas_ni_vendidas(self):
+        """La tabla identifica la pieza con su miniatura; entradas y vendidas
+        se quitaron de la vista (el dato sigue viajando en `productos_datos`
+        para la tarjeta "Unidades vendidas")."""
+        producto = crear_producto_con_stock(cantidad=3, usuario=self.usuario, nombre="Con foto")
+        ProductoFoto.objects.create(producto=producto, imagen=imagen_prueba("a.png"))
+
+        respuesta = self.client.get(reverse("inventario_visualizacion"))
+        self.assertEqual(respuesta.status_code, 200)
+        contenido = respuesta.content.decode()
+
+        self.assertContains(respuesta, 'data-col="foto"')
+        self.assertIn('class="thumbnail"', contenido)
+        self.assertNotIn('data-col="entradas"', contenido)
+        self.assertNotIn('data-col="vendidas"', contenido)
+
+    def test_inventario_no_consulta_una_foto_por_fila(self):
+        """La miniatura se resuelve con el prefetch de `foto_principal`: el
+        numero de consultas no debe crecer con la cantidad de productos."""
+        for indice in range(3):
+            producto = crear_producto_con_stock(
+                cantidad=1, usuario=self.usuario, nombre=f"Pieza {indice}"
+            )
+            ProductoFoto.objects.create(producto=producto, imagen=imagen_prueba(f"{indice}.png"))
+
+        with CaptureQueriesContext(connection) as consultas_3:
+            self.client.get(reverse("inventario_visualizacion"))
+
+        for indice in range(3, 9):
+            producto = crear_producto_con_stock(
+                cantidad=1, usuario=self.usuario, nombre=f"Pieza {indice}"
+            )
+            ProductoFoto.objects.create(producto=producto, imagen=imagen_prueba(f"{indice}.png"))
+
+        with CaptureQueriesContext(connection) as consultas_9:
+            self.client.get(reverse("inventario_visualizacion"))
+
+        self.assertEqual(len(consultas_3.captured_queries), len(consultas_9.captured_queries))
 
 
 class IngresoFotoTests(TestCase):
