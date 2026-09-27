@@ -47,7 +47,7 @@ class VendedorSoloInventarioMiddleware:
     directamente.
     """
 
-    rutas_permitidas = {"inventario_visualizacion", "productos_lista", "consulta_ventas", "logout"}
+    rutas_permitidas = {"inventario_visualizacion", "consulta_ventas", "logout"}
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -64,7 +64,7 @@ class VendedorSoloInventarioMiddleware:
 
         nombre_ruta = request.resolver_match.url_name
         if nombre_ruta == "dashboard":
-            return redirect(reverse("inventario_visualizacion"))
+            return redirect(reverse("consulta_ventas"))
         if nombre_ruta not in self.rutas_permitidas:
             raise PermissionDenied("El rol Vendedor solo puede ver el inventario.")
         return None
