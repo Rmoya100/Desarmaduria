@@ -39,11 +39,15 @@
             </div>
             <div class="table-panel__acciones">
                 <a href="{% url 'productos_exportar_excel' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" class="btn" data-export-url="{% url 'productos_exportar_excel' %}">Exportar Excel</a>
+                {% if puede_editar %}
                 <a href="{% url 'productos_edicion_masiva' %}" class="btn">Edición masiva</a>
+                {% endif %}
                 {% if puede_importar %}
                 <a href="{% url 'productos_importar' %}" class="btn">Importar desde Excel</a>
                 {% endif %}
+                {% if puede_crear %}
                 <a href="#producto-modal" class="btn btn-primary" data-modal-open="producto-modal">Nuevo producto</a>
+                {% endif %}
             </div>
         </div>
         <div class="table-scroll">
@@ -78,7 +82,7 @@
                             </span>
                         </th>
                         <th data-col="precio">Precio venta</th>
-                        <th data-col="acciones" class="table-actions-cell">Acciones</th>
+                        {% if puede_editar or puede_eliminar %}<th data-col="acciones" class="table-actions-cell">Acciones</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -108,7 +112,12 @@
                     </td>
                     <td data-label="Costo">{{ producto.costo|clp }}</td>
                     <td data-label="Precio venta">{% if producto.precio_venta is not None %}{{ producto.precio_venta|clp }}{% else %}<span class="inventory-muted">—</span>{% endif %}</td>
-                    <td class="table-actions-cell"><a href="#editar-{{ producto.pk }}" class="btn btn-sm" data-modal-open="editar-{{ producto.pk }}">Editar</a><a href="#eliminar-{{ producto.pk }}" class="btn btn-sm btn-danger" data-modal-open="eliminar-{{ producto.pk }}">Eliminar</a></td>
+                    {% if puede_editar or puede_eliminar %}
+                    <td class="table-actions-cell">
+                        {% if puede_editar %}<a href="#editar-{{ producto.pk }}" class="btn btn-sm" data-modal-open="editar-{{ producto.pk }}">Editar</a>{% endif %}
+                        {% if puede_eliminar %}<a href="#eliminar-{{ producto.pk }}" class="btn btn-sm btn-danger" data-modal-open="eliminar-{{ producto.pk }}">Eliminar</a>{% endif %}
+                    </td>
+                    {% endif %}
                 </tr>
                 {% empty %}<tr><td colspan="8" class="empty-state">No hay productos registrados.</td></tr>{% endfor %}
                 </tbody>
@@ -118,6 +127,7 @@
 </form>
 
 {% for producto in productos %}
+{% if puede_editar %}
 <div class="inventory-modal" id="editar-{{ producto.pk }}" aria-hidden="true">
     <div class="inventory-modal__dialog">
         <a href="#" class="inventory-modal__close" data-modal-close aria-label="Cerrar">&times;</a>
@@ -127,6 +137,8 @@
         </div>
     </div>
 </div>
+{% endif %}
+{% if puede_eliminar %}
 <div class="inventory-modal" id="eliminar-{{ producto.pk }}" aria-hidden="true">
     <div class="inventory-modal__dialog">
         <a href="#" class="inventory-modal__close" data-modal-close aria-label="Cerrar">&times;</a>
@@ -139,8 +151,11 @@
         </form>
     </div>
 </div>
+{% endif %}
 {% endfor %}
+{% if puede_crear %}
 <div class="inventory-modal{% if abrir_modal %} inventory-modal--open{% endif %}" id="producto-modal" aria-hidden="{% if abrir_modal %}false{% else %}true{% endif %}"><div class="inventory-modal__dialog"><a href="#" class="inventory-modal__close" data-modal-close aria-label="Cerrar">&times;</a><h2>Nuevo producto</h2><form method="post" action="{% url 'producto_crear' %}" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<div class="inventory-modal__actions"><a href="#" class="btn" data-modal-close>Cancelar</a><button class="btn btn-primary" type="submit">Guardar producto</button></div></form></div></div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}<script src="{% static 'js/inventario.js' %}"></script>{% endblock %}
