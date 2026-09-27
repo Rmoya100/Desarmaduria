@@ -130,9 +130,11 @@ def reporte_ventas(desde, hasta):
         .annotate(total=Sum("total_venta"))
         .order_by("-total")
     )
-    # Con IVA (transferencia/tarjeta, ver FormaPago.aplica_iva) vs sin IVA
-    # (efectivo): las 2 metricas que pide "Dashboard y Reportes" ademas del
-    # desglose fila por fila de por_forma_pago.
+    # Con IVA (todo pago que no sea efectivo, ver FormaPago.aplica_iva) vs
+    # sin IVA (efectivo): las 2 metricas que pide "Dashboard y Reportes"
+    # ademas del desglose fila por fila de por_forma_pago. Se clasifica por
+    # monto_iva -no por el nombre de la forma de pago- para que las ventas
+    # ya registradas conserven la clasificacion que tenian al guardarse.
     resumen_iva = ventas.aggregate(
         total_efectivo=Coalesce(
             Sum("total_venta", filter=Q(monto_iva__isnull=True)), Decimal("0"), output_field=MONTO

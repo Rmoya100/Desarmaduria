@@ -15,6 +15,7 @@ from .visualizaciones.forms import ProductoForm
 from .models import (
     Categoria,
     DetalleEntrada,
+    DetalleVenta,
     Entrada,
     FormaPago,
     Marca,
@@ -27,6 +28,7 @@ from .models import (
     Vehiculo,
     Venta,
 )
+from .reportes.queries import reporte_ventas
 from .servicios.ingresos import obtener_o_crear_vehiculo, resolver_producto
 from .servicios.inventario import productos_con_stock
 from .services import MAX_FOTOS_POR_PRODUCTO
@@ -1201,3 +1203,67 @@ class VendedorAccessTests(TestCase):
     def test_vendedor_puede_consultar_catalogo_de_ventas_sin_ver_el_modulo_completo(self):
         self.assertEqual(self.client.get(reverse("consulta_ventas")).status_code, 200)
         self.assertEqual(self.client.get(reverse("ventas")).status_code, 403)
+
+
+class FormaPagoIvaTests(TestCase):
+    """El 19% de IVA se aplica a toda forma de pago que no sea efectivo: la
+    lista la administra el usuario en Configuracion y ahi aparecen nombres
+    como "Cuenta empresa Mercado pago" o "Cuenta empresa Scotiabank", que
+    antes caian en el balde de efectivo por no decir "tarjeta"."""
+
+    def setUp(self):
+        self.usuario = crear_usuario("iva")
+        self.producto = crear_producto_con_stock(cantidad=10, usuario=self.usuario)
+        self.tipo_documento = TipoDocumento.objects.create(tipo_documento="Boleta")
+
+    def _venta_con(self, nombre_forma_pago, cantidad=2, precio=Decimal("50000")):
+        venta = Venta.objects.create(
+            fecha_venta="2026-01-02",
+            tipo_documento=self.tipo_documento,
+            forma_pago=FormaPago.objects.create(forma_pago=nombre_forma_pago),
+            usuario=self.usuario,
+        )
+        DetalleVenta.objects.create(
+            venta=venta, producto=self.producto, cantidad=cantidad, precio=precio
+        )
+        venta.actualizar_montos()
+        venta.refresh_from_db()
+        return venta
+
+    def test_aplica_iva_a_todo_lo_que_no_sea_efectivo(self):
+        for nombre in (
+            "Cuenta empresa Mercado pago",
+            "Cuenta empresa Scotiabank",
+            "Tarjeta",
+            "Transferencia",
+        ):
+            with self.subTest(forma_pago=nombre):
+                self.assertTrue(FormaPago(forma_pago=nombre).aplica_iva())
+
+    def test_no_aplica_iva_al_efectivo(self):
+        for nombre in ("Efectivo", "efectivo", "EFECTIVO"):
+            with self.subTest(forma_pago=nombre):
+                self.assertFalse(FormaPago(forma_pago=nombre).aplica_iva())
+
+    def test_venta_con_cuenta_empresa_calcula_el_19_por_ciento(self):
+        venta = self._venta_con("Cuenta empresa Mercado pago")
+        self.assertEqual(venta.monto_neto, Decimal("100000"))
+        self.assertEqual(venta.monto_iva, Decimal("19000.00"))
+        self.assertEqual(venta.monto_total, Decimal("119000.00"))
+
+    def test_venta_en_efectivo_no_guarda_montos_de_iva(self):
+        venta = self._venta_con("Efectivo")
+        self.assertIsNone(venta.monto_neto)
+        self.assertIsNone(venta.monto_iva)
+        self.assertIsNone(venta.monto_total)
+
+    def test_el_reporte_suma_la_cuenta_empresa_como_transferencia_tarjeta(self):
+        """Es lo que alimenta los KPI del Dashboard: la venta por Mercado
+        pago debe dejar de contarse como efectivo."""
+        self._venta_con("Cuenta empresa Mercado pago")
+        self._venta_con("Efectivo", cantidad=1, precio=Decimal("30000"))
+
+        reporte = reporte_ventas("2026-01-01", "2026-01-31")
+        self.assertEqual(reporte["total_transferencia_tarjeta"], Decimal("119000.00"))
+        self.assertEqual(reporte["total_efectivo"], Decimal("30000"))
+        self.assertEqual(reporte["total_iva"], Decimal("19000.00"))

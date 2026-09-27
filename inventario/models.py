@@ -454,13 +454,14 @@ class FormaPago(models.Model):
         return self.forma_pago
 
     def aplica_iva(self):
-        """Las ventas pagadas con transferencia o tarjeta llevan 19% de IVA
-        extra; en efectivo no. "Forma de pago" es una lista libre que el
-        usuario administra en Configuración (no un enum fijo), asi que la
-        regla se decide por texto en este unico lugar, para no duplicarla
-        en el form, las vistas y el JS del formulario de venta."""
-        texto = self.forma_pago.lower()
-        return "transferencia" in texto or "tarjeta" in texto
+        """Toda forma de pago que no sea efectivo lleva 19% de IVA extra.
+        "Forma de pago" es una lista libre que el usuario administra en
+        Configuración (no un enum fijo) y ahi conviven nombres como
+        "Tarjeta", "Transferencia" o "Cuenta empresa Mercado pago", asi que
+        la regla se define por descarte -no es efectivo- en este unico
+        lugar, para no duplicarla en el form, las vistas y el JS del
+        formulario de venta."""
+        return "efectivo" not in self.forma_pago.lower()
 
 
 class TipoDocumento(models.Model):
