@@ -94,7 +94,7 @@ def dashboard(request):
     valor_por_categoria = {}
     for producto in productos:
         nombre_categoria = producto.categoria.nombre_categoria
-        valor_producto = (producto.costo or Decimal("0")) * producto.stock_disponible
+        valor_producto = (producto.precio_venta or Decimal("0")) * producto.stock_disponible
         valor_por_categoria[nombre_categoria] = (
             valor_por_categoria.get(nombre_categoria, Decimal("0")) + valor_producto
         )

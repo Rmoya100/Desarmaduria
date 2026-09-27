@@ -33,6 +33,7 @@
             <table class="data-table tabla-cards inventario-tabla">
                 <thead>
                     <tr>
+                        <th data-col="foto">Foto</th>
                         <th data-col="nombre">
                             <span class="col-head">Producto
                                 <span class="col-sort" role="group" aria-label="Ordenar por producto">
@@ -50,8 +51,6 @@
                             </span>
                         </th>
                         <th data-col="vehiculo">Automóvil</th>
-                        <th data-col="entradas">Entradas</th>
-                        <th data-col="vendidas">Vendidas</th>
                         <th data-col="disponible">
                             <span class="col-head">Disponible
                                 <span class="col-sort" role="group" aria-label="Ordenar por disponible">
@@ -74,16 +73,25 @@
                 <tbody>
                 {% for producto in productos %}
                 <tr data-id="{{ producto.pk }}">
+                    <td data-label="Foto">
+                        {% with foto_principal=producto.foto_principal %}
+                        {% if foto_principal %}
+                        <a href="{{ foto_principal.imagen.url }}" target="_blank" rel="noopener" class="thumbnail-link">
+                            <img src="{{ foto_principal.imagen.url }}" alt="" class="thumbnail">
+                        </a>
+                        {% else %}
+                        <span class="inventory-muted">—</span>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
                     <td data-label="Producto"><strong>{{ producto.nombre }}</strong></td>
                     <td data-label="Categoría">{{ producto.categoria.nombre_categoria }}</td>
                     <td data-label="Automóvil">{% if producto.vehiculo %}{{ producto.vehiculo.modelo.marca.nombre_marca }} {{ producto.vehiculo.modelo.nombre_modelo }} · {{ producto.vehiculo.rango_anios }}{% else %}<span class="inventory-muted">Sin vehículo informado</span>{% endif %}</td>
-                    <td data-label="Entradas">{{ producto.total_entradas }}</td>
-                    <td data-label="Vendidas">{{ producto.total_vendido }}</td>
                     <td data-label="Disponible"><span class="stock-badge{% if producto.stock_disponible <= 0 %} stock-badge--empty{% endif %}">{{ producto.stock_disponible }}</span></td>
                     <td data-label="Precio de venta estimado">{% if producto.precio_venta is not None %}{{ producto.precio_venta|clp }}{% else %}<span class="inventory-muted">Sin precio</span>{% endif %}</td>
                     <td data-label="Valor en stock" class="value-cell">{{ producto.valor_stock|clp }}</td>
                 </tr>
-                {% empty %}<tr><td colspan="8" class="empty-state">No hay productos que coincidan con los filtros.</td></tr>{% endfor %}
+                {% empty %}<tr><td colspan="7" class="empty-state">No hay productos que coincidan con los filtros.</td></tr>{% endfor %}
                 </tbody>
             </table>
         </div>

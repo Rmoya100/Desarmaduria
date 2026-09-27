@@ -30,7 +30,10 @@ def productos_con_stock():
 
 
 def valor_inventario(productos):
+    """Valor a precio de venta estimado (`Producto.precio_venta`), no a costo:
+    en piezas usadas se compra el vehiculo completo, no cada pieza por
+    separado, asi que `Producto.costo` no se lleva por unidad."""
     total = 0
     for producto in productos:
-        total += (producto.costo or 0) * producto.stock_disponible
+        total += (producto.precio_venta or 0) * producto.stock_disponible
     return total
