@@ -5,20 +5,31 @@
 {% block title %}Inventario · Desarmaduría{% endblock %}
 {% block content %}
 
-<div class="metric-grid">
-    {% for metrica in metricas %}<article class="metric-card"><span>{{ metrica.titulo }}</span><strong data-metric="{{ metrica.clave }}">{{ metrica.valor }}</strong><small>{{ metrica.detalle }}</small></article>{% endfor %}
-</div>
-
-<form method="get" class="inventario-filtros">
+<form method="get" class="inventario-filtros vendedores-filtros" data-filtros-vehiculos>
     <div class="inventory-toolbar">
         <div class="inventory-toolbar__fields">
-            <div class="filter-field"><label for="id_categoria">Categoría</label>{{ form.categoria }}</div>
-            <div class="filter-field"><label for="id_marca">Marca</label>{{ form.marca }}</div>
-            <div class="filter-field"><label for="id_modelo">Modelo</label>{{ form.modelo }}</div>
+            <div class="filter-field filter-field--wide">
+                <label for="inventario-busqueda">Buscar</label>
+                <input id="inventario-busqueda" class="input-control" type="search" name="q" value="{{ busqueda }}" placeholder="Nombre, código, categoría, marca o modelo">
+            </div>
+            <div class="filter-field">
+                <label for="inventario-marca">Marca</label>
+                <select id="inventario-marca" class="input-control" name="marca" data-filtro-marca>
+                    <option value="">Todas las marcas</option>
+                    {% for marca in marcas %}<option value="{{ marca.pk }}"{% if marca_id == marca.pk|stringformat:'s' %} selected{% endif %}>{{ marca.nombre_marca }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="inventario-modelo">Modelo</label>
+                <select id="inventario-modelo" class="input-control" name="modelo" data-filtro-modelo>
+                    <option value="">Todos los modelos</option>
+                    {% for modelo in modelos %}<option value="{{ modelo.pk }}" data-marca="{{ modelo.marca_id }}"{% if modelo_id == modelo.pk|stringformat:'s' %} selected{% endif %}>{{ modelo.nombre_modelo }}</option>{% endfor %}
+                </select>
+            </div>
         </div>
         <div class="inventory-toolbar__actions">
-            <noscript><button type="submit" class="btn btn-primary">Aplicar filtros</button></noscript>
-            <a href="{% url 'inventario_visualizacion' %}" class="btn" data-limpiar>Limpiar</a>
+            <button type="submit" class="btn btn-primary">Buscar</button>
+            <a href="{% url 'inventario_visualizacion' %}" class="btn">Limpiar</a>
         </div>
     </div>
 
@@ -117,4 +128,36 @@
 {{ productos_datos|json_script:"inventario-datos" }}
 {% endblock %}
 
-{% block extra_js %}<script src="{% static 'js/inventario.js' %}"></script>{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/inventario.js' %}"></script>
+<script>
+(() => {
+    const formulario = document.querySelector('[data-filtros-vehiculos]');
+    if (!formulario) return;
+    const marca = formulario.querySelector('[data-filtro-marca]');
+    const modelo = formulario.querySelector('[data-filtro-modelo]');
+    const opciones = [...modelo.options].slice(1);
+    const modeloSeleccionado = modelo.value;
+
+    function actualizarModelos() {
+        const marcaSeleccionada = marca.value;
+        opciones.forEach((opcion) => {
+            opcion.hidden = Boolean(marcaSeleccionada) && opcion.dataset.marca !== marcaSeleccionada;
+        });
+        if (modelo.value && modelo.selectedOptions[0].hidden) modelo.value = '';
+    }
+
+    marca.addEventListener('change', () => {
+        actualizarModelos();
+        formulario.submit();
+    });
+    modelo.addEventListener('change', () => {
+        const opcion = modelo.selectedOptions[0];
+        if (opcion && opcion.dataset.marca) marca.value = opcion.dataset.marca;
+        formulario.submit();
+    });
+    actualizarModelos();
+    if (modeloSeleccionado) modelo.value = modeloSeleccionado;
+})();
+</script>
+{% endblock %}

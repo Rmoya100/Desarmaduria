@@ -61,6 +61,7 @@
                     </a>
                 </li>
                 {% endif %}
+                {% endif %}
                 {% if request.user|tiene_permiso:"productos:ver" %}
                 <li>
                     {% comment %}
@@ -114,7 +115,6 @@
                     </details>
                     {% endwith %}
                 </li>
-                {% endif %}
                 {% endif %}
                 {% if request.user|tiene_permiso:"ingresos:ver" %}
                 <li>

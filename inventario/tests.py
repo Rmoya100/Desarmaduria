@@ -20,6 +20,7 @@ from .models import (
     FormaPago,
     Marca,
     Modelo,
+    Permiso,
     Producto,
     ProductoFoto,
     Rol,
@@ -823,6 +824,18 @@ class InventarioExistenciasTests(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertNotIn("id_estado", respuesta.content.decode())
 
+    def test_inventario_busca_por_texto_igual_que_consulta_para_ventas(self):
+        """Mismo criterio de busqueda que `consulta_ventas`: nombre, codigo,
+        categoria, marca o modelo, todo con un solo campo de texto."""
+        buscado = crear_producto_con_stock(cantidad=2, usuario=self.usuario, nombre="Guardafango")
+        otro = crear_producto_con_stock(cantidad=2, usuario=self.usuario, nombre="Bisagra")
+
+        respuesta = self.client.get(reverse("inventario_visualizacion"), {"q": "guardafango"})
+        self.assertEqual(respuesta.status_code, 200)
+        ids = {p.pk for p in respuesta.context["productos"]}
+        self.assertIn(buscado.pk, ids)
+        self.assertNotIn(otro.pk, ids)
+
     def test_url_valorizado_antigua_redirige_a_inventario(self):
         """La pantalla "Inventario valorizado" se fusiono con Existencias;
         esta URL se mantiene solo para no romper enlaces guardados."""
@@ -850,8 +863,7 @@ class InventarioExistenciasTests(TestCase):
 
     def test_inventario_muestra_la_foto_principal_y_no_entradas_ni_vendidas(self):
         """La tabla identifica la pieza con su miniatura; entradas y vendidas
-        se quitaron de la vista (el dato sigue viajando en `productos_datos`
-        para la tarjeta "Unidades vendidas")."""
+        se quitaron de la vista."""
         producto = crear_producto_con_stock(cantidad=3, usuario=self.usuario, nombre="Con foto")
         ProductoFoto.objects.create(producto=producto, imagen=imagen_prueba("a.png"))
 
@@ -1161,6 +1173,21 @@ class BodegaAccessTests(TestCase):
         self.assertEqual(self.client.get(reverse("gastos")).status_code, 403)
         self.assertEqual(self.client.get(reverse("reportes")).status_code, 403)
         self.assertEqual(self.client.get(reverse("productos_lista")).status_code, 403)
+
+    def test_bodega_con_permiso_de_productos_puede_gestionarlos(self):
+        """Si a Bodega se le agregan permisos de productos (Roles > Editar
+        rol), debe poder usarlos: ni el middleware ni el menu deben seguir
+        bloqueandolo por el solo hecho de ser Bodega."""
+        for modulo, accion in (("productos", "ver"), ("productos", "crear"), ("productos", "editar")):
+            permiso = Permiso.objects.get(modulo=modulo, nombre_permiso=accion)
+            self.rol.rol_permisos.create(permiso=permiso)
+
+        respuesta = self.client.get(reverse("productos_lista"))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("Productos", respuesta.content.decode())
+
+        self.assertEqual(self.client.get(reverse("producto_crear")).status_code, 302)
+        self.assertEqual(self.client.get(reverse("inventario_visualizacion")).status_code, 200)
 
 
 class VendedorAccessTests(TestCase):

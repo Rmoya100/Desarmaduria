@@ -197,6 +197,13 @@
         var inputBuscadorModal = document.getElementById("buscador-producto-modal");
         var listaProductosModal = document.getElementById("lista-productos-modal");
 
+        var modalEditarLinea = document.getElementById("modal-editar-linea");
+        var inputEditarCantidad = document.getElementById("editar-linea-cantidad");
+        var inputEditarPrecio = document.getElementById("editar-linea-precio");
+        var editarLineaProductoEl = document.getElementById("editar-linea-producto");
+        var errorEditarLineaEl = document.getElementById("error-editar-linea");
+        var filaEnEdicion = null;
+
         function normalizarProducto(texto) {
             return (texto || "")
                 .toLowerCase()
@@ -351,6 +358,48 @@
             ocultarErrorNuevaLinea();
         }
 
+        function mostrarErrorEditarLinea(mensaje) {
+            errorEditarLineaEl.textContent = mensaje;
+            errorEditarLineaEl.hidden = false;
+        }
+
+        function ocultarErrorEditarLinea() {
+            errorEditarLineaEl.hidden = true;
+            errorEditarLineaEl.textContent = "";
+        }
+
+        function abrirEdicionLinea(fila) {
+            filaEnEdicion = fila;
+            inputEditarCantidad.value = fila.querySelector('[name$="-cantidad"]').value;
+            inputEditarPrecio.value = fila.querySelector('[name$="-precio"]').value;
+            editarLineaProductoEl.textContent = fila.querySelector(".detalle-producto-nombre").textContent;
+            ocultarErrorEditarLinea();
+            setModal(modalEditarLinea, true);
+            inputEditarCantidad.focus();
+        }
+
+        function guardarEdicionLinea() {
+            if (!filaEnEdicion) return;
+            var cantidad = parseInt(inputEditarCantidad.value, 10);
+            var precio = parseFloat(inputEditarPrecio.value);
+            if (!cantidad || cantidad < 1) {
+                mostrarErrorEditarLinea("Ingresa una cantidad válida.");
+                return;
+            }
+            if (isNaN(precio) || precio < 0) {
+                mostrarErrorEditarLinea("Ingresa un precio válido.");
+                return;
+            }
+            filaEnEdicion.querySelector('[name$="-cantidad"]').value = cantidad;
+            filaEnEdicion.querySelector('[name$="-precio"]').value = precio;
+            filaEnEdicion.querySelector(".detalle-cantidad-valor").textContent = cantidad;
+            filaEnEdicion.querySelector(".detalle-precio-valor").textContent = formatearCLP(precio);
+            actualizarSubtotalFila(filaEnEdicion);
+            actualizarResumenVenta();
+            setModal(modalEditarLinea, false);
+            filaEnEdicion = null;
+        }
+
         cuerpoFormset.querySelectorAll(".formset-row").forEach(actualizarSubtotalFila);
         actualizarResumenVenta();
 
@@ -377,15 +426,26 @@
             }
             if (event.target.closest("[data-agregar-linea]")) {
                 agregarLineaAlDetalle();
+                return;
+            }
+            var botonEditarLinea = event.target.closest("[data-formset-editar]");
+            if (botonEditarLinea) {
+                abrirEdicionLinea(botonEditarLinea.closest(".formset-row"));
+                return;
+            }
+            if (event.target.closest("[data-guardar-edicion-linea]")) {
+                guardarEdicionLinea();
             }
         });
     }
 
     // Pantalla unica de Inventario (Existencias + Valorizado fusionados):
-    // filtro por categoria/marca/modelo, orden por columna y paginacion,
-    // todo instantaneo sobre las filas ya renderizadas. Va en su propio
-    // IIFE (no dentro del bloque de `.product-filtros` de abajo) para que
-    // corra igual en esta pagina, donde ese otro formulario no existe.
+    // el filtro (texto + marca + modelo) recarga la pagina y lo resuelve el
+    // servidor, igual que en Consulta para ventas; el orden por columna y la
+    // paginacion siguen siendo instantaneos en el navegador, sobre las filas
+    // ya filtradas. Va en su propio IIFE (no dentro del bloque de
+    // `.product-filtros` de abajo) para que corra igual en esta pagina,
+    // donde ese otro formulario no existe.
     (function inicializarInventarioUnificado() {
         var form = document.querySelector(".inventario-filtros");
         if (!form) return;
@@ -401,11 +461,10 @@
         });
         var TOTAL_COLUMNAS = encabezados.length || 8;
 
-        // Los valores crudos (ids de categoria/marca/modelo, cantidades y el
-        // valor en stock) viajan aparte via json_script: el texto de las
-        // celdas ya esta formateado ($ con puntos de miles) y parsearlo de
-        // vuelta es fragil (ver nota de "costo" mas abajo, en el bloque de
-        // Productos).
+        // Los valores crudos (disponible y valor en stock) viajan aparte via
+        // json_script: el texto de las celdas ya esta formateado ($ con
+        // puntos de miles) y parsearlo de vuelta es fragil (ver nota de
+        // "costo" mas abajo, en el bloque de Productos).
         var datosEl = document.getElementById("inventario-datos");
         var datosPorId = {};
         if (datosEl) {
@@ -413,12 +472,6 @@
                 datosPorId[item.id] = item;
             });
         }
-
-        var selects = {
-            categoria: form.querySelector('select[name="categoria"]'),
-            marca: form.querySelector('select[name="marca"]'),
-            modelo: form.querySelector('select[name="modelo"]')
-        };
 
         var filas = Array.prototype.filter.call(tbody.querySelectorAll("tr"), function (tr) {
             return tr.hasAttribute("data-id");
@@ -457,28 +510,6 @@
             filaVacia.hidden = false;
         }
 
-        var tarjetas = {
-            disponibles: document.querySelector('[data-metric="disponibles"]'),
-            con_stock: document.querySelector('[data-metric="con_stock"]'),
-            vendidas: document.querySelector('[data-metric="vendidas"]'),
-            valor: document.querySelector('[data-metric="valor"]')
-        };
-
-        function actualizarTarjetas(visibles) {
-            var disponibles = 0, conStock = 0, vendidas = 0, valor = 0;
-            visibles.forEach(function (tr) {
-                var d = tr._datos;
-                disponibles += d.disponible || 0;
-                if ((d.disponible || 0) > 0) conStock += 1;
-                vendidas += d.vendidas || 0;
-                valor += parseFloat(d.valor) || 0;
-            });
-            if (tarjetas.disponibles) tarjetas.disponibles.textContent = String(disponibles);
-            if (tarjetas.con_stock) tarjetas.con_stock.textContent = String(conStock);
-            if (tarjetas.vendidas) tarjetas.vendidas.textContent = String(vendidas);
-            if (tarjetas.valor) tarjetas.valor.textContent = formatearCLP(valor);
-        }
-
         var pager = form.querySelector("[data-pager]");
         var pagerTam = form.querySelector("[data-pager-tamano]");
         var pagerInfo = form.querySelector("[data-pager-info]");
@@ -511,25 +542,8 @@
             if (countEl) {
                 countEl.textContent = visibles.length + (visibles.length === 1 ? " producto" : " productos");
             }
-            actualizarTarjetas(visibles);
             aplicarPaginacion(visibles);
             actualizarVacia(visibles.length);
-        }
-
-        function aplicarFiltro() {
-            var catSel = selects.categoria ? selects.categoria.value : "";
-            var marcaSel = selects.marca ? selects.marca.value : "";
-            var modeloSel = selects.modelo ? selects.modelo.value : "";
-            filas.forEach(function (tr) {
-                var d = tr._datos;
-                var ok = true;
-                if (catSel && String(d.categoria) !== catSel) ok = false;
-                if (ok && marcaSel && String(d.marca) !== marcaSel) ok = false;
-                if (ok && modeloSel && String(d.modelo) !== modeloSel) ok = false;
-                tr._coincide = ok;
-            });
-            paginaActual = 1;
-            actualizarVista();
         }
 
         var ordenActual = { campo: "nombre", dir: 1 };
@@ -577,14 +591,6 @@
             ordenActual = { campo: v.replace("-", ""), dir: v.charAt(0) === "-" ? -1 : 1 };
         }
 
-        Object.keys(selects).forEach(function (clave) {
-            if (selects[clave]) selects[clave].addEventListener("change", aplicarFiltro);
-        });
-
-        form.addEventListener("submit", function (event) {
-            event.preventDefault();
-        });
-
         form.querySelectorAll("[data-orden]").forEach(function (btn) {
             btn.addEventListener("click", function (event) {
                 event.preventDefault();
@@ -592,17 +598,6 @@
                 ordenar(valor.replace("-", ""), valor.charAt(0) === "-" ? -1 : 1);
             });
         });
-
-        var limpiar = form.querySelector("[data-limpiar]");
-        if (limpiar) {
-            limpiar.addEventListener("click", function (event) {
-                event.preventDefault();
-                Object.keys(selects).forEach(function (clave) {
-                    if (selects[clave]) selects[clave].value = "";
-                });
-                aplicarFiltro();
-            });
-        }
 
         if (pagerTam) {
             pagerTam.addEventListener("change", function () {
@@ -623,7 +618,11 @@
             });
         }
 
-        aplicarFiltro();
+        // El filtro (texto + marca + modelo) ya se aplico en el servidor: las
+        // filas que llegaron son las que corresponden. Solo falta inicializar
+        // el conteo y la paginacion sobre ese conjunto.
+        filas.forEach(function (tr) { tr._coincide = true; });
+        actualizarVista();
     })();
 
     var form = document.querySelector(".product-filtros");

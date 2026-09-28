@@ -14,7 +14,18 @@ class BodegaSoloIngresosMiddleware:
     escrita directamente.
     """
 
-    rutas_permitidas = {"ingresos", "ingreso_crear", "ingreso_detalle", "logout"}
+    rutas_permitidas = {
+        "ingresos", "ingreso_crear", "ingreso_detalle",
+        "inventario_visualizacion",
+        "productos_lista", "producto_crear", "producto_editar",
+        "producto_foto_eliminar", "producto_foto_principal", "producto_foto_mover",
+        "productos_edicion_masiva",
+        "logout",
+    }
+    # Si se le dan mas permisos a Bodega (ej. productos.eliminar o
+    # productos.importar), hay que agregar tambien esas rutas aqui: el
+    # permiso es la fuente de autorizacion de cada vista, pero esta lista
+    # es la unica que decide que URLs puede alcanzar el rol.
 
     def __init__(self, get_response):
         self.get_response = get_response

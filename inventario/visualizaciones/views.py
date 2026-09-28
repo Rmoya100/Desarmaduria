@@ -13,11 +13,9 @@ from ..models import Categoria, Marca, Modelo, Producto, ProductoFoto, Vehiculo
 from ..permisos import permiso_requerido, tiene_permiso
 from ..servicios.catalogo import importar_catalogo
 from ..servicios.inventario import productos_con_stock
-from ..templatetags.monedas import clp
 from .forms import (
     EdicionMasivaForm,
     ImportarCatalogoForm,
-    InventarioFiltroForm,
     ProductoFiltroForm,
     ProductoForm,
 )
@@ -77,34 +75,6 @@ def consulta_ventas(request):
             "modelo_id": modelo_id,
         },
     )
-
-
-def _productos_filtrados(request, *, forzar_con_stock=False):
-    """`forzar_con_stock=True` fija el listado a solo productos con stock
-    disponible (el Inventario es, por definicion, lo que hay para vender) y
-    quita el filtro "Estado" del formulario: elegir "Agotados" o "Todos" ahi
-    ya no tendria ningun efecto visible, asi que ni se ofrece."""
-    form = InventarioFiltroForm(request.GET or None)
-    if forzar_con_stock:
-        del form.fields["estado"]
-    productos = productos_con_stock()
-
-    if form.is_valid():
-        datos = form.cleaned_data
-        if datos["categoria"]:
-            productos = productos.filter(categoria=datos["categoria"])
-        if datos["marca"]:
-            productos = productos.filter(vehiculo__modelo__marca=datos["marca"])
-        if datos["modelo"]:
-            productos = productos.filter(vehiculo__modelo=datos["modelo"])
-        if not forzar_con_stock:
-            if datos["estado"] == "disponible":
-                productos = productos.filter(stock_disponible__gt=0)
-            elif datos["estado"] == "agotado":
-                productos = productos.filter(stock_disponible__lte=0)
-    if forzar_con_stock:
-        productos = productos.filter(stock_disponible__gt=0)
-    return form, productos
 
 
 def _filtrar_lista_productos(request):
@@ -172,8 +142,38 @@ def inventario_visualizacion(request):
     por separado), asi que el valor de referencia del inventario es cuanto
     se estima poder venderlo. El KPI "Valor inventario" del Dashboard usa el
     mismo criterio (`servicios.inventario.valor_inventario`).
+
+    El buscador (texto + Marca + Modelo) es identico al de Consulta para
+    ventas (`consulta_ventas`, mas abajo): misma busqueda por texto y mismo
+    cruce marca<->modelo, para que ambas pantallas se comporten igual.
     """
-    form, productos = _productos_filtrados(request, forzar_con_stock=True)
+    productos = productos_con_stock().filter(stock_disponible__gt=0)
+
+    busqueda = request.GET.get("q", "").strip()
+    marca_id = request.GET.get("marca", "")
+    modelo_id = request.GET.get("modelo", "")
+
+    modelo = None
+    if modelo_id.isdigit():
+        modelo = Modelo.objects.filter(pk=modelo_id).select_related("marca").first()
+        if modelo:
+            marca_id = str(modelo.marca_id)
+        else:
+            modelo_id = ""
+
+    if busqueda:
+        productos = productos.filter(
+            Q(nombre__icontains=busqueda)
+            | Q(codigo__icontains=busqueda)
+            | Q(categoria__nombre_categoria__icontains=busqueda)
+            | Q(vehiculo__modelo__marca__nombre_marca__icontains=busqueda)
+            | Q(vehiculo__modelo__nombre_modelo__icontains=busqueda)
+        )
+    if marca_id.isdigit():
+        productos = productos.filter(vehiculo__modelo__marca_id=marca_id)
+    if modelo:
+        productos = productos.filter(vehiculo__modelo=modelo)
+
     productos = productos.annotate(
         valor_stock=ExpressionWrapper(
             Coalesce(F("precio_venta"), Value(Decimal("0"))) * F("stock_disponible"),
@@ -195,38 +195,31 @@ def inventario_visualizacion(request):
         orden_actual = "nombre"
     productos = list(productos.order_by(ORDENES_INVENTARIO[orden_actual], "nombre"))
 
-    unidades_disponibles = sum(p.stock_disponible for p in productos)
     valor_total = sum(p.valor_stock for p in productos)
-    # Datos crudos (sin formato de moneda ni de miles) para que el filtro,
-    # el orden y el recalculo de las tarjetas en el navegador (static/js/
-    # inventario.js) operen en el cliente sin volver a pedirle nada al
-    # servidor. Los valores ya formateados que ve la persona usuaria viven
-    # solo en el HTML de la tabla.
+    # Datos crudos (sin formato de moneda ni de miles) para que el orden por
+    # columna (static/js/inventario.js) opere en el cliente sin volver a
+    # pedirle nada al servidor. Los valores ya formateados que ve la persona
+    # usuaria viven solo en el HTML de la tabla.
     productos_datos = [
-        {
-            "id": producto.pk,
-            "categoria": producto.categoria_id,
-            "marca": producto.vehiculo.modelo.marca_id if producto.vehiculo_id else None,
-            "modelo": producto.vehiculo.modelo_id if producto.vehiculo_id else None,
-            "entradas": producto.total_entradas,
-            "vendidas": producto.total_vendido,
-            "disponible": producto.stock_disponible,
-            "valor": producto.valor_stock,
-        }
+        {"id": producto.pk, "disponible": producto.stock_disponible, "valor": producto.valor_stock}
         for producto in productos
     ]
+
+    marcas = Marca.objects.order_by("nombre_marca")
+    modelos = Modelo.objects.order_by("marca__nombre_marca", "nombre_modelo")
+    if marca_id.isdigit():
+        modelos = modelos.filter(marca_id=marca_id)
+
     contexto = {
-        "form": form,
         "productos": productos,
         "productos_datos": productos_datos,
         "orden_actual": orden_actual,
         "valor_inventario": valor_total,
-        "metricas": [
-            {"clave": "disponibles", "titulo": "Unidades disponibles", "valor": unidades_disponibles, "detalle": "Stock actual"},
-            {"clave": "con_stock", "titulo": "Productos con stock", "valor": sum(p.stock_disponible > 0 for p in productos), "detalle": "Referencias activas"},
-            {"clave": "vendidas", "titulo": "Unidades vendidas", "valor": sum(p.total_vendido for p in productos), "detalle": "Salidas registradas"},
-            {"clave": "valor", "titulo": "Valor del inventario", "valor": clp(valor_total), "detalle": "A precio de venta estimado"},
-        ],
+        "busqueda": busqueda,
+        "marcas": marcas,
+        "modelos": modelos,
+        "marca_id": marca_id,
+        "modelo_id": modelo_id,
     }
     return render(request, "inventario/visualizaciones/inventario.html", contexto)
 
